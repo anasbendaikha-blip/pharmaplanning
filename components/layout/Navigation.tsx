@@ -47,6 +47,11 @@ const NAV_ITEMS: NavItem[] = [
     icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
   },
   {
+    href: '/titulaire/conformite',
+    label: 'Conformité',
+    icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',
+  },
+  {
     href: '/titulaire/assistant-planning',
     label: 'Assistant Planning',
     icon: 'M13 10V3L4 14h7v7l9-11h-7z',

@@ -12,6 +12,7 @@ import {
 } from '@/lib/utils/dateUtils';
 import { formatHours } from '@/lib/utils/hourUtils';
 import Link from 'next/link';
+import ComplianceWidget from '@/components/legal/ComplianceWidget';
 
 /* ---- Types ---- */
 interface DayOverview {
@@ -316,6 +317,9 @@ export default function DashboardPage() {
           </section>
         )}
 
+        {/* ─── Conformité légale ─── */}
+        <ComplianceWidget />
+
         {/* ─── Accès rapide ─── */}
         <section className="quick-access">
           <h2 className="section-title">Accès rapide</h2>
@@ -326,6 +330,7 @@ export default function DashboardPage() {
             <QuickLink href="/employes" label="Employés" description={`Gérer les ${stats.activeEmployees} employés`} />
             <QuickLink href="/calendrier-conges" label="Congés" description="Calendrier annuel des congés" />
             <QuickLink href="/portail-employe" label="Portail Employé" description="Vue employé du planning" />
+            <QuickLink href="/titulaire/conformite" label="Conformité" description="Rapport de conformité légale" />
           </div>
         </section>
       </div>
