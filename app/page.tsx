@@ -750,6 +750,25 @@ export default function DashboardPage() {
             grid-template-columns: repeat(2, 1fr);
           }
         }
+
+        @media (max-width: 640px) {
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+          .week-grid {
+            grid-template-columns: repeat(3, 1fr);
+          }
+          .quick-grid {
+            grid-template-columns: 1fr;
+          }
+          .dashboard-header {
+            flex-direction: column;
+          }
+          .week-label {
+            min-width: auto;
+            font-size: var(--font-size-xs);
+          }
+        }
       `}</style>
     </>
   );

@@ -254,3 +254,24 @@ a:hover {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-neutral-500);
 }
+
+/* ---- Responsive Mobile ---- */
+@media (max-width: 768px) {
+  .app-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "header"
+      "main";
+  }
+
+  .app-main {
+    padding: var(--spacing-4);
+    max-height: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-main {
+    padding: var(--spacing-3);
+  }
+}

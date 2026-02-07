@@ -153,6 +153,15 @@ export default function EmployesPage() {
         </div>
 
         {/* Liste des employés */}
+        {employees.length === 0 ? (
+          <div className="empty-state-wrapper">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-300)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            <h3 className="empty-title">Aucun employe</h3>
+            <p className="empty-desc">Aucun employe dans cette pharmacie pour le moment.</p>
+          </div>
+        ) : (
         <div className="employees-grid">
           {CATEGORY_ORDER.map(cat => {
             const group = grouped[cat];
@@ -192,6 +201,7 @@ export default function EmployesPage() {
             );
           })}
         </div>
+        )}
       </div>
 
       <style jsx>{`
@@ -362,6 +372,29 @@ export default function EmployesPage() {
 
         .card-separator {
           color: var(--color-neutral-300);
+        }
+
+        .empty-state-wrapper {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: var(--spacing-12) var(--spacing-6);
+          min-height: 300px;
+        }
+
+        .empty-title {
+          font-size: var(--font-size-lg);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-neutral-700);
+          margin: var(--spacing-4) 0 var(--spacing-2) 0;
+        }
+
+        .empty-desc {
+          font-size: var(--font-size-sm);
+          color: var(--color-neutral-500);
+          margin: 0;
         }
       `}</style>
     </>
