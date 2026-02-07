@@ -5,6 +5,7 @@ import { useOrganization } from '@/lib/supabase/client';
 import Step1Period from '@/components/assistant/Step1Period';
 import Step2Shifts from '@/components/assistant/Step2Shifts';
 import Step3Constraints from '@/components/assistant/Step3Constraints';
+import Step4Generate from '@/components/assistant/Step4Generate';
 import type { WizardStep, WizardConfig } from '@/lib/assistant/types';
 import { validateStep1, validateStep2, validateStep3 } from '@/lib/assistant/validation';
 
@@ -141,10 +142,7 @@ export default function AssistantPlanningPage() {
           <Step3Constraints config={config} setConfig={saveConfig} />
         )}
         {currentStep === 4 && (
-          <div className="placeholder-step">
-            <h2>Génération &amp; Validation</h2>
-            <p>À venir dans la prochaine session...</p>
-          </div>
+          <Step4Generate config={config} setConfig={saveConfig} />
         )}
       </div>
 
@@ -331,23 +329,6 @@ export default function AssistantPlanningPage() {
           padding: var(--spacing-8);
           min-height: 460px;
           margin-bottom: var(--spacing-6);
-        }
-
-        .placeholder-step {
-          text-align: center;
-          padding: 80px 20px;
-        }
-
-        .placeholder-step h2 {
-          margin: 0 0 var(--spacing-3) 0;
-          font-size: var(--font-size-xl);
-          color: var(--color-neutral-700);
-        }
-
-        .placeholder-step p {
-          margin: 0;
-          font-size: var(--font-size-sm);
-          color: var(--color-neutral-500);
         }
 
         /* ─── Navigation ─── */
