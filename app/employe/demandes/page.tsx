@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useOrganization } from '@/lib/supabase/client';
 import { getEmployees } from '@/lib/supabase/queries';
 import { formatDate, parseISODate } from '@/lib/utils/dateUtils';
@@ -25,6 +25,8 @@ interface AppRequest {
   target_employee_name?: string;
   reason: string | null;
   manager_comment: string | null;
+  attachment_url: string | null;
+  attachment_name: string | null;
   created_at: string;
 }
 
@@ -58,7 +60,10 @@ export default function DemandesPage() {
   const [endDate, setEndDate] = useState('');
   const [targetEmployeeId, setTargetEmployeeId] = useState('');
   const [reason, setReason] = useState('');
+  const [attachment, setAttachment] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
     if (!organizationId) return;
@@ -118,6 +123,8 @@ export default function DemandesPage() {
     setEndDate('');
     setTargetEmployeeId('');
     setReason('');
+    setAttachment(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }
 
   async function handleSubmitRequest() {
@@ -134,6 +141,29 @@ export default function DemandesPage() {
 
     setSubmitting(true);
     try {
+      // Upload piece jointe si presente
+      let attachmentUrl: string | null = null;
+      let attachmentName: string | null = null;
+
+      if (attachment) {
+        setUploading(true);
+        const formData = new FormData();
+        formData.append('file', attachment);
+
+        const uploadRes = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!uploadRes.ok) {
+          const uploadErr = await uploadRes.json();
+          toast.error(uploadErr.error || 'Erreur lors de l\'upload du fichier');
+          setUploading(false);
+          setSubmitting(false);
+          return;
+        }
+        const uploadData = await uploadRes.json();
+        attachmentUrl = uploadData.url;
+        attachmentName = uploadData.fileName;
+        setUploading(false);
+      }
+
       const res = await fetch('/api/requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -145,6 +175,8 @@ export default function DemandesPage() {
           endDate: endDate || startDate,
           targetEmployeeId: requestType === 'shift_swap' ? targetEmployeeId : null,
           reason: reason || null,
+          attachmentUrl,
+          attachmentName,
         }),
       });
 
@@ -261,6 +293,12 @@ export default function DemandesPage() {
                     <div className="request-target">Echange avec : {req.target_employee_name}</div>
                   )}
                   {req.reason && <div className="request-reason">{req.reason}</div>}
+                  {req.attachment_url && req.attachment_name && (
+                    <a href={req.attachment_url} target="_blank" rel="noopener noreferrer" className="attachment-link">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                      {req.attachment_name}
+                    </a>
+                  )}
                   {req.manager_comment && (
                     <div className="manager-comment">
                       <strong>Commentaire manager :</strong> {req.manager_comment}
@@ -338,12 +376,64 @@ export default function DemandesPage() {
                 <label htmlFor="req-reason">Motif (optionnel)</label>
                 <textarea id="req-reason" value={reason} onChange={e => setReason(e.target.value)} rows={3} placeholder="Precisions..." />
               </div>
+
+              <div className="form-group">
+                <label>Piece jointe (optionnel)</label>
+                <div
+                  className={`file-drop-zone ${attachment ? 'file-drop-zone--has-file' : ''}`}
+                  onClick={() => fileInputRef.current?.click()}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.classList.add('file-drop-zone--drag'); }}
+                  onDragLeave={e => { e.currentTarget.classList.remove('file-drop-zone--drag'); }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    e.currentTarget.classList.remove('file-drop-zone--drag');
+                    const file = e.dataTransfer.files[0];
+                    if (file) setAttachment(file);
+                  }}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"
+                    onChange={e => {
+                      const file = e.target.files?.[0] || null;
+                      setAttachment(file);
+                    }}
+                    style={{ display: 'none' }}
+                  />
+                  {attachment ? (
+                    <div className="file-preview">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+                      <span className="file-name">{attachment.name}</span>
+                      <span className="file-size">({(attachment.size / 1024).toFixed(0)} Ko)</span>
+                      <button
+                        className="file-remove"
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setAttachment(null);
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        aria-label="Supprimer le fichier"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="file-placeholder">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      <span>Cliquez ou glissez un fichier ici</span>
+                      <small>PDF, JPG, PNG, DOCX - 5 Mo max</small>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setShowModal(false)} type="button">Annuler</button>
-              <button className="btn-primary" onClick={handleSubmitRequest} disabled={submitting} type="button">
-                {submitting ? 'Envoi...' : 'Envoyer'}
+              <button className="btn-primary" onClick={handleSubmitRequest} disabled={submitting || uploading} type="button">
+                {uploading ? 'Upload du fichier...' : submitting ? 'Envoi...' : 'Envoyer'}
               </button>
             </div>
           </div>
@@ -439,6 +529,17 @@ export default function DemandesPage() {
           border-radius: var(--radius-md); margin-top: var(--spacing-2);
         }
 
+        .attachment-link {
+          display: inline-flex; align-items: center; gap: var(--spacing-2);
+          font-size: var(--font-size-sm); color: var(--color-secondary-700);
+          text-decoration: none; margin-top: var(--spacing-2);
+          padding: var(--spacing-2) var(--spacing-3);
+          background: var(--color-secondary-50);
+          border-radius: var(--radius-md);
+          transition: all var(--transition-fast);
+        }
+        .attachment-link:hover { background: var(--color-secondary-100); }
+
         .request-footer {
           display: flex; justify-content: space-between; align-items: center;
           padding-top: var(--spacing-3); border-top: 1px solid var(--color-neutral-100);
@@ -529,6 +630,55 @@ export default function DemandesPage() {
         }
         .btn-primary:hover:not(:disabled) { background: var(--color-primary-700); }
         .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .file-drop-zone {
+          border: 2px dashed var(--color-neutral-300);
+          border-radius: var(--radius-md);
+          padding: var(--spacing-4);
+          cursor: pointer;
+          transition: all var(--transition-fast);
+          text-align: center;
+        }
+        .file-drop-zone:hover, .file-drop-zone--drag {
+          border-color: var(--color-primary-400);
+          background: var(--color-primary-50);
+        }
+        .file-drop-zone--has-file {
+          border-style: solid;
+          border-color: var(--color-success-300);
+          background: var(--color-success-50);
+        }
+
+        .file-placeholder {
+          display: flex; flex-direction: column; align-items: center; gap: var(--spacing-2);
+          color: var(--color-neutral-400);
+        }
+        .file-placeholder span {
+          font-size: var(--font-size-sm); font-weight: var(--font-weight-medium);
+          color: var(--color-neutral-500);
+        }
+        .file-placeholder :global(small) {
+          font-size: var(--font-size-xs); color: var(--color-neutral-400);
+        }
+
+        .file-preview {
+          display: flex; align-items: center; gap: var(--spacing-2);
+          color: var(--color-success-700);
+        }
+        .file-name {
+          font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold);
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 250px;
+        }
+        .file-size { font-size: var(--font-size-xs); color: var(--color-neutral-500); }
+        .file-remove {
+          margin-left: auto;
+          width: 24px; height: 24px;
+          border: none; background: var(--color-neutral-200);
+          border-radius: var(--radius-full); cursor: pointer;
+          display: flex; align-items: center; justify-content: center;
+          color: var(--color-neutral-600); transition: all var(--transition-fast);
+        }
+        .file-remove:hover { background: var(--color-danger-100); color: var(--color-danger-600); }
 
         @media (max-width: 640px) {
           .page-header { flex-direction: column; }

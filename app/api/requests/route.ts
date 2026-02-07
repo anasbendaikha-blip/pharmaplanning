@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
 /** POST — Creer une nouvelle demande */
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { organizationId, employeeId, type, startDate, endDate, targetEmployeeId, reason } = body;
+  const { organizationId, employeeId, type, startDate, endDate, targetEmployeeId, reason, attachmentUrl, attachmentName } = body;
 
   if (!organizationId || !employeeId || !type || !startDate) {
     return NextResponse.json(
@@ -99,6 +99,8 @@ export async function POST(request: NextRequest) {
       end_date: endDate || startDate,
       target_employee_id: targetEmployeeId || null,
       reason: reason || null,
+      attachment_url: attachmentUrl || null,
+      attachment_name: attachmentName || null,
       status: 'pending',
     })
     .select()
