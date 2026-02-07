@@ -334,6 +334,7 @@ export default function DashboardPage() {
             <QuickLink href="/employes" label="Employés" description={`Gérer les ${stats.activeEmployees} employés`} />
             <QuickLink href="/calendrier-conges" label="Congés" description="Calendrier annuel des congés" />
             <QuickLink href="/portail-employe" label="Portail Employé" description="Vue employé du planning" />
+            <QuickLink href="/titulaire/analytics" label="Analytics" description="KPIs, graphiques et predictions" />
             <QuickLink href="/titulaire/conformite" label="Conformité" description="Rapport de conformité légale" />
             <QuickLink href="/titulaire/recap-hebdo" label="Récap. Hebdo" description="Synthèse heures et exports" />
           </div>
