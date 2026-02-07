@@ -212,6 +212,37 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Notification non-bloquante : shift modifie
+  try {
+    if (data) {
+      const shiftData = data as Record<string, unknown>;
+      const empId = shiftData.employee_id as string;
+      const orgId = shiftData.organization_id as string;
+      const empInfo = await lookupEmployee(supabase, empId);
+      if (empInfo) {
+        await NotificationService.send({
+          type: 'shift_updated',
+          priority: 'normal',
+          organizationId: orgId,
+          employeeId: empId,
+          recipientEmail: empInfo.email,
+          recipientName: empInfo.name,
+          title: 'Shift modifie',
+          message: `Votre shift du ${shiftData.date} a ete modifie`,
+          actionUrl: '/planning',
+          data: {
+            date: shiftData.date as string,
+            startTime: shiftData.start_time as string,
+            endTime: shiftData.end_time as string,
+            hours: (shiftData.hours as number) || 0,
+          },
+        });
+      }
+    }
+  } catch (notifErr) {
+    console.error('[Shifts] Erreur notification PUT (non-bloquante):', notifErr);
+  }
+
   return NextResponse.json(data);
 }
 
@@ -226,6 +257,24 @@ export async function DELETE(request: NextRequest) {
 
   const supabase = getServiceClient();
 
+  // Lookup le shift AVANT suppression pour la notification
+  let shiftInfo: Record<string, unknown> | null = null;
+  let empInfo: EmployeeInfo | null = null;
+  try {
+    const { data: shiftData } = await supabase
+      .from('shifts')
+      .select('employee_id, organization_id, date, start_time, end_time')
+      .eq('id', shiftId)
+      .single();
+
+    if (shiftData) {
+      shiftInfo = shiftData;
+      empInfo = await lookupEmployee(supabase, shiftData.employee_id);
+    }
+  } catch {
+    // Non-bloquant
+  }
+
   const { error } = await supabase
     .from('shifts')
     .delete()
@@ -234,6 +283,30 @@ export async function DELETE(request: NextRequest) {
   if (error) {
     console.error('Erreur suppression shift:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Notification non-bloquante : shift supprime
+  try {
+    if (shiftInfo && empInfo) {
+      await NotificationService.send({
+        type: 'shift_deleted',
+        priority: 'normal',
+        organizationId: shiftInfo.organization_id as string,
+        employeeId: shiftInfo.employee_id as string,
+        recipientEmail: empInfo.email,
+        recipientName: empInfo.name,
+        title: 'Shift supprime',
+        message: `Votre shift du ${shiftInfo.date} a ete supprime`,
+        actionUrl: '/planning',
+        data: {
+          date: shiftInfo.date as string,
+          startTime: shiftInfo.start_time as string,
+          endTime: shiftInfo.end_time as string,
+        },
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Shifts] Erreur notification DELETE (non-bloquante):', notifErr);
   }
 
   return NextResponse.json({ success: true });

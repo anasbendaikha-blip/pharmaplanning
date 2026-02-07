@@ -153,6 +153,94 @@ Consultez votre planning : ${getAppUrl()}/planning`;
   return { subject, htmlBody, textBody };
 }
 
+// ─── SHIFT MODIFIE ───
+
+export function getShiftUpdatedTemplate(data: {
+  employeeName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  hours: number;
+}): EmailTemplate {
+  const subject = `Shift modifie le ${data.date}`;
+
+  const htmlBody = getBaseTemplate(`
+    <h2>Bonjour ${data.employeeName},</h2>
+    <p>Un de vos shifts a ete modifie :</p>
+
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">Date</span>
+        <span class="info-value">${data.date}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Nouveaux horaires</span>
+        <span class="info-value">${data.startTime} - ${data.endTime}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Duree</span>
+        <span class="info-value">${data.hours}h</span>
+      </div>
+    </div>
+
+    <p>Consultez votre planning pour voir les modifications.</p>
+    <a href="${getAppUrl()}/planning" class="button">Voir mon planning</a>
+  `);
+
+  const textBody = `Bonjour ${data.employeeName},
+
+Un de vos shifts a ete modifie :
+
+Date : ${data.date}
+Nouveaux horaires : ${data.startTime} - ${data.endTime}
+Duree : ${data.hours}h
+
+Consultez votre planning : ${getAppUrl()}/planning`;
+
+  return { subject, htmlBody, textBody };
+}
+
+// ─── SHIFT SUPPRIME ───
+
+export function getShiftDeletedTemplate(data: {
+  employeeName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+}): EmailTemplate {
+  const subject = `Shift supprime le ${data.date}`;
+
+  const htmlBody = getBaseTemplate(`
+    <h2>Bonjour ${data.employeeName},</h2>
+    <p>Un de vos shifts a ete supprime :</p>
+
+    <div class="info-box">
+      <div class="info-row">
+        <span class="info-label">Date</span>
+        <span class="info-value">${data.date}</span>
+      </div>
+      <div class="info-row">
+        <span class="info-label">Horaires</span>
+        <span class="info-value">${data.startTime} - ${data.endTime}</span>
+      </div>
+    </div>
+
+    <p>Consultez votre planning pour voir les changements.</p>
+    <a href="${getAppUrl()}/planning" class="button">Voir mon planning</a>
+  `);
+
+  const textBody = `Bonjour ${data.employeeName},
+
+Un de vos shifts a ete supprime :
+
+Date : ${data.date}
+Horaires : ${data.startTime} - ${data.endTime}
+
+Consultez votre planning : ${getAppUrl()}/planning`;
+
+  return { subject, htmlBody, textBody };
+}
+
 // ─── CONGE APPROUVE ───
 
 export function getLeaveApprovedTemplate(data: {
@@ -391,12 +479,3 @@ Voir le rapport : ${getAppUrl()}/titulaire/recap-hebdo`;
   return { subject, htmlBody, textBody };
 }
 
-/** Map type → fonction template pour dispatch dynamique */
-export const emailTemplateMap: Record<string, (...args: unknown[]) => EmailTemplate> = {
-  shift_created: getShiftCreatedTemplate as (...args: unknown[]) => EmailTemplate,
-  leave_approved: getLeaveApprovedTemplate as (...args: unknown[]) => EmailTemplate,
-  leave_rejected: getLeaveRejectedTemplate as (...args: unknown[]) => EmailTemplate,
-  leave_requested: getLeaveRequestedTemplate as (...args: unknown[]) => EmailTemplate,
-  compliance_alert: getComplianceAlertTemplate as (...args: unknown[]) => EmailTemplate,
-  weekly_summary: getWeeklySummaryTemplate as (...args: unknown[]) => EmailTemplate,
-};

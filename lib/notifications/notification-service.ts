@@ -14,6 +14,8 @@ import type { NotificationPayload, NotificationType, NotificationPreferences } f
 import { sendEmail } from './email-service';
 import {
   getShiftCreatedTemplate,
+  getShiftUpdatedTemplate,
+  getShiftDeletedTemplate,
   getLeaveApprovedTemplate,
   getLeaveRejectedTemplate,
   getLeaveRequestedTemplate,
@@ -112,6 +114,23 @@ export class NotificationService {
           startTime: (data.startTime as string) || '',
           endTime: (data.endTime as string) || '',
           hours: (data.hours as number) || 0,
+        });
+
+      case 'shift_updated':
+        return getShiftUpdatedTemplate({
+          employeeName: payload.recipientName,
+          date: (data.date as string) || '',
+          startTime: (data.startTime as string) || '',
+          endTime: (data.endTime as string) || '',
+          hours: (data.hours as number) || 0,
+        });
+
+      case 'shift_deleted':
+        return getShiftDeletedTemplate({
+          employeeName: payload.recipientName,
+          date: (data.date as string) || '',
+          startTime: (data.startTime as string) || '',
+          endTime: (data.endTime as string) || '',
         });
 
       case 'leave_approved':
