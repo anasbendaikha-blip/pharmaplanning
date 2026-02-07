@@ -13,6 +13,7 @@ import {
 import { formatHours } from '@/lib/utils/hourUtils';
 import Link from 'next/link';
 import ComplianceWidget from '@/components/legal/ComplianceWidget';
+import WeekSummaryWidget from '@/components/recap/WeekSummaryWidget';
 
 /* ---- Types ---- */
 interface DayOverview {
@@ -317,8 +318,11 @@ export default function DashboardPage() {
           </section>
         )}
 
-        {/* ─── Conformité légale ─── */}
-        <ComplianceWidget />
+        {/* ─── Widgets résumé ─── */}
+        <section className="widgets-row">
+          <ComplianceWidget />
+          <WeekSummaryWidget />
+        </section>
 
         {/* ─── Accès rapide ─── */}
         <section className="quick-access">
@@ -331,6 +335,7 @@ export default function DashboardPage() {
             <QuickLink href="/calendrier-conges" label="Congés" description="Calendrier annuel des congés" />
             <QuickLink href="/portail-employe" label="Portail Employé" description="Vue employé du planning" />
             <QuickLink href="/titulaire/conformite" label="Conformité" description="Rapport de conformité légale" />
+            <QuickLink href="/titulaire/recap-hebdo" label="Récap. Hebdo" description="Synthèse heures et exports" />
           </div>
         </section>
       </div>
@@ -419,6 +424,13 @@ export default function DashboardPage() {
         .stats-grid {
           display: grid;
           grid-template-columns: repeat(4, 1fr);
+          gap: var(--spacing-4);
+        }
+
+        /* ─── Widgets row ─── */
+        .widgets-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
           gap: var(--spacing-4);
         }
 
@@ -726,7 +738,8 @@ export default function DashboardPage() {
           .stats-grid {
             grid-template-columns: repeat(2, 1fr);
           }
-          .charts-row {
+          .charts-row,
+          .widgets-row {
             grid-template-columns: 1fr;
           }
           .week-grid {
