@@ -75,6 +75,32 @@ export function validateStep2(config: WizardConfig): { valid: boolean; errors: s
   return { valid: errors.length === 0, errors };
 }
 
+export function validateStep3(config: WizardConfig): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  const constraints = Object.values(config.employeeConstraints);
+
+  if (constraints.length === 0) {
+    errors.push('Aucune contrainte employé n\'a été configurée');
+  }
+
+  constraints.forEach((c) => {
+    if (c.minHoursPerWeek > c.maxHoursPerWeek) {
+      errors.push(`Employé : les heures minimum (${c.minHoursPerWeek}h) dépassent le maximum (${c.maxHoursPerWeek}h)`);
+    }
+
+    if (c.maxHoursPerWeek > 48) {
+      errors.push(`Employé : le maximum (${c.maxHoursPerWeek}h) dépasse le plafond légal de 48h`);
+    }
+
+    if (c.restDays.length >= 7) {
+      errors.push('Un employé a tous les jours en repos — il ne pourra pas être planifié');
+    }
+  });
+
+  return { valid: errors.length === 0, errors };
+}
+
 export function calculateShiftHours(startTime: string, endTime: string): number {
   const [startH, startM] = startTime.split(':').map(Number);
   const [endH, endM] = endTime.split(':').map(Number);

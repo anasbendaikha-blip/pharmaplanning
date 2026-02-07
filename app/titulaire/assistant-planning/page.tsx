@@ -4,8 +4,9 @@ import { useState, useCallback } from 'react';
 import { useOrganization } from '@/lib/supabase/client';
 import Step1Period from '@/components/assistant/Step1Period';
 import Step2Shifts from '@/components/assistant/Step2Shifts';
+import Step3Constraints from '@/components/assistant/Step3Constraints';
 import type { WizardStep, WizardConfig } from '@/lib/assistant/types';
-import { validateStep1, validateStep2 } from '@/lib/assistant/validation';
+import { validateStep1, validateStep2, validateStep3 } from '@/lib/assistant/validation';
 
 const STORAGE_KEY = 'assistant-planning-config';
 
@@ -52,6 +53,8 @@ export default function AssistantPlanningPage() {
       validation = validateStep1(config);
     } else if (currentStep === 2) {
       validation = validateStep2(config);
+    } else if (currentStep === 3) {
+      validation = validateStep3(config);
     }
 
     if (!validation.valid) {
@@ -135,10 +138,7 @@ export default function AssistantPlanningPage() {
           <Step2Shifts config={config} setConfig={saveConfig} />
         )}
         {currentStep === 3 && (
-          <div className="placeholder-step">
-            <h2>Contraintes Employés</h2>
-            <p>À venir dans la prochaine session...</p>
-          </div>
+          <Step3Constraints config={config} setConfig={saveConfig} />
         )}
         {currentStep === 4 && (
           <div className="placeholder-step">
