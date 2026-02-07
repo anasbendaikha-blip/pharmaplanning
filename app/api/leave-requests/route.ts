@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { NotificationService } from '@/lib/notifications/notification-service';
 
 function getServiceClient() {
   return createClient(
@@ -81,6 +82,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Notification non-bloquante : prevenir le manager
+  try {
+    const empInfo = await lookupEmployee(supabase, employee_id);
+    const manager = await lookupManager(supabase, organizationId);
+    if (empInfo && manager) {
+      await NotificationService.send({
+        type: 'leave_requested',
+        priority: 'normal',
+        organizationId,
+        employeeId: manager.employeeId || employee_id,
+        recipientEmail: manager.email,
+        recipientName: manager.name,
+        title: 'Nouvelle demande de conge',
+        message: `${empInfo.name} demande un conge du ${start_date} au ${end_date}`,
+        actionUrl: '/calendrier-conges',
+        data: {
+          employeeName: empInfo.name,
+          startDate: start_date,
+          endDate: end_date,
+          days: business_days || 0,
+          leaveType: type,
+        },
+      });
+    }
+  } catch (notifErr) {
+    console.error('[LeaveRequests] Erreur notification POST (non-bloquante):', notifErr);
+  }
+
   return NextResponse.json(data);
 }
 
@@ -118,6 +147,41 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Notification non-bloquante : si le statut change vers approved/rejected
+  try {
+    if (body.status && (body.status === 'approved' || body.status === 'rejected') && data) {
+      const leaveData = data as Record<string, unknown>;
+      const empId = leaveData.employee_id as string;
+      const orgId = leaveData.organization_id as string;
+      const empInfo = await lookupEmployee(supabase, empId);
+
+      if (empInfo) {
+        const notifType = body.status === 'approved' ? 'leave_approved' : 'leave_rejected';
+        await NotificationService.send({
+          type: notifType,
+          priority: 'normal',
+          organizationId: orgId,
+          employeeId: empId,
+          recipientEmail: empInfo.email,
+          recipientName: empInfo.name,
+          title: body.status === 'approved' ? 'Conge approuve' : 'Conge refuse',
+          message: body.status === 'approved'
+            ? `Votre conge du ${leaveData.start_date} au ${leaveData.end_date} a ete approuve`
+            : `Votre conge du ${leaveData.start_date} au ${leaveData.end_date} a ete refuse`,
+          actionUrl: '/calendrier-conges',
+          data: {
+            startDate: leaveData.start_date as string,
+            endDate: leaveData.end_date as string,
+            days: (leaveData.business_days as number) || 0,
+            leaveType: leaveData.type as string,
+          },
+        });
+      }
+    }
+  } catch (notifErr) {
+    console.error('[LeaveRequests] Erreur notification PUT (non-bloquante):', notifErr);
+  }
+
   return NextResponse.json(data);
 }
 
@@ -143,4 +207,75 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true });
+}
+
+// ─── Helpers ───
+
+interface EmployeeInfo {
+  name: string;
+  email: string;
+}
+
+interface ManagerInfo {
+  name: string;
+  email: string;
+  employeeId: string | null;
+}
+
+/** Lookup employee name & email (generated) by ID */
+async function lookupEmployee(
+  supabase: ReturnType<typeof getServiceClient>,
+  employeeId: string,
+): Promise<EmployeeInfo | null> {
+  const { data } = await supabase
+    .from('employees')
+    .select('first_name, last_name')
+    .eq('id', employeeId)
+    .single();
+
+  if (!data) return null;
+
+  const firstName = data.first_name || '';
+  const lastName = data.last_name || '';
+  const name = `${firstName} ${lastName}`.trim();
+  const email = `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`;
+
+  return { name, email };
+}
+
+/** Lookup le manager (owner) de l'organisation */
+async function lookupManager(
+  supabase: ReturnType<typeof getServiceClient>,
+  organizationId: string,
+): Promise<ManagerInfo | null> {
+  // Chercher le owner via user_organizations
+  const { data: userOrg } = await supabase
+    .from('user_organizations')
+    .select('user_id')
+    .eq('organization_id', organizationId)
+    .eq('role', 'owner')
+    .limit(1)
+    .single();
+
+  if (!userOrg) return null;
+
+  // Chercher les infos auth
+  const { data: authData } = await supabase.auth.admin.getUserById(userOrg.user_id);
+
+  if (!authData?.user?.email) return null;
+
+  // Essayer de trouver l'employee correspondant (pour l'ID)
+  const { data: emp } = await supabase
+    .from('employees')
+    .select('id, first_name, last_name')
+    .eq('organization_id', organizationId)
+    .eq('role', 'Pharmacien')
+    .limit(1)
+    .single();
+
+  return {
+    name: emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : 'Manager',
+    email: authData.user.email,
+    employeeId: emp?.id || null,
+  };
 }

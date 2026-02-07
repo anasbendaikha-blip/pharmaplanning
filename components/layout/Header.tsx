@@ -6,6 +6,7 @@
  */
 
 import { useOrganization } from '@/lib/supabase/client';
+import NotificationBell from '@/components/notifications/NotificationBell';
 
 export default function Header() {
   const { organization, userRole, user, signOut } = useOrganization();
@@ -55,6 +56,7 @@ export default function Header() {
               <span className="header-user-email">{user.email}</span>
             )}
             <span className="header-user-label">{roleLabel}</span>
+            {user && <NotificationBell />}
             {user && (
               <button
                 className="header-logout-btn"

@@ -9,6 +9,7 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { NotificationService } from '@/lib/notifications/notification-service';
 
 function getServiceClient() {
   return createClient(
@@ -88,6 +89,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Notification non-bloquante pour chaque employe unique
+    try {
+      const orgId = shifts[0]?.organization_id;
+      if (orgId && data) {
+        const uniqueEmployeeIds = [...new Set(data.map((s: Record<string, unknown>) => s.employee_id as string))];
+        for (const empId of uniqueEmployeeIds) {
+          const empShifts = data.filter((s: Record<string, unknown>) => s.employee_id === empId);
+          const empInfo = await lookupEmployee(supabase, empId);
+          if (empInfo) {
+            await NotificationService.send({
+              type: 'shift_created',
+              priority: 'normal',
+              organizationId: orgId,
+              employeeId: empId,
+              recipientEmail: empInfo.email,
+              recipientName: empInfo.name,
+              title: 'Nouveaux shifts planifies',
+              message: `${empShifts.length} shift(s) planifie(s) pour vous`,
+              actionUrl: '/planning',
+              data: {
+                count: empShifts.length,
+                date: (empShifts[0] as Record<string, unknown>).date as string,
+                startTime: (empShifts[0] as Record<string, unknown>).start_time as string,
+                endTime: (empShifts[0] as Record<string, unknown>).end_time as string,
+                hours: (empShifts[0] as Record<string, unknown>).hours as number,
+              },
+            });
+          }
+        }
+      }
+    } catch (notifErr) {
+      console.error('[Shifts] Erreur notification batch (non-bloquante):', notifErr);
+    }
+
     return NextResponse.json(data || []);
   }
 
@@ -119,6 +154,27 @@ export async function POST(request: NextRequest) {
   if (error) {
     console.error('Erreur création shift:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Notification non-bloquante
+  try {
+    const empInfo = await lookupEmployee(supabase, employee_id);
+    if (empInfo) {
+      await NotificationService.send({
+        type: 'shift_created',
+        priority: 'normal',
+        organizationId,
+        employeeId: employee_id,
+        recipientEmail: empInfo.email,
+        recipientName: empInfo.name,
+        title: 'Nouveau shift planifie',
+        message: `Shift le ${date} de ${start_time} a ${end_time}`,
+        actionUrl: '/planning',
+        data: { date, startTime: start_time, endTime: end_time, hours: hours || 0 },
+      });
+    }
+  } catch (notifErr) {
+    console.error('[Shifts] Erreur notification (non-bloquante):', notifErr);
   }
 
   return NextResponse.json(data);
@@ -181,4 +237,32 @@ export async function DELETE(request: NextRequest) {
   }
 
   return NextResponse.json({ success: true });
+}
+
+// ─── Helpers ───
+
+interface EmployeeInfo {
+  name: string;
+  email: string;
+}
+
+/** Lookup employee name & email (generated) by ID */
+async function lookupEmployee(
+  supabase: ReturnType<typeof getServiceClient>,
+  employeeId: string,
+): Promise<EmployeeInfo | null> {
+  const { data } = await supabase
+    .from('employees')
+    .select('first_name, last_name')
+    .eq('id', employeeId)
+    .single();
+
+  if (!data) return null;
+
+  const firstName = data.first_name || '';
+  const lastName = data.last_name || '';
+  const name = `${firstName} ${lastName}`.trim();
+  const email = `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`;
+
+  return { name, email };
 }
