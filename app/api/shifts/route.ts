@@ -53,12 +53,15 @@ export async function GET(request: NextRequest) {
 
 /** POST — Créer un shift (ou batch si body est un tableau) */
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  console.log('🔵 [API] POST /api/shifts');
 
+  const body = await request.json();
   const supabase = getServiceClient();
 
   // ─── Mode batch : body est un tableau ───
   if (Array.isArray(body)) {
+    console.log(`📝 [API] Batch mode: ${body.length} shifts`);
+
     const shifts = body.map((item: Record<string, unknown>) => ({
       organization_id: item.organizationId as string,
       employee_id: item.employee_id as string,
@@ -73,6 +76,7 @@ export async function POST(request: NextRequest) {
     // Validation
     const invalid = shifts.some(s => !s.organization_id || !s.employee_id || !s.date || !s.start_time || !s.end_time);
     if (invalid) {
+      console.error('❌ [API] Missing required fields in batch');
       return NextResponse.json(
         { error: 'Champs requis manquants dans le batch' },
         { status: 400 }
@@ -85,19 +89,24 @@ export async function POST(request: NextRequest) {
       .select();
 
     if (error) {
-      console.error('Erreur batch insert shifts:', error);
+      console.error('❌ [API] Batch insert error:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
+
+    console.log(`✅ [API] ${data?.length || 0} shifts created`);
 
     // Notification non-bloquante pour chaque employe unique
     try {
       const orgId = shifts[0]?.organization_id;
       if (orgId && data) {
         const uniqueEmployeeIds = [...new Set(data.map((s: Record<string, unknown>) => s.employee_id as string))];
+        console.log(`📧 [API] Notifying ${uniqueEmployeeIds.length} unique employees...`);
+
         for (const empId of uniqueEmployeeIds) {
           const empShifts = data.filter((s: Record<string, unknown>) => s.employee_id === empId);
           const empInfo = await lookupEmployee(supabase, empId);
           if (empInfo) {
+            console.log(`📧 [API] Triggering notification for ${empInfo.name} (${empInfo.email})`);
             await NotificationService.send({
               type: 'shift_created',
               priority: 'normal',
@@ -116,20 +125,26 @@ export async function POST(request: NextRequest) {
                 hours: (empShifts[0] as Record<string, unknown>).hours as number,
               },
             });
+            console.log(`✅ [API] Notification triggered for ${empInfo.name}`);
+          } else {
+            console.warn(`⚠️ [API] Employee not found for ID: ${empId}, skipping notification`);
           }
         }
       }
     } catch (notifErr) {
-      console.error('[Shifts] Erreur notification batch (non-bloquante):', notifErr);
+      console.error('❌ [API] Notification batch error (non-blocking):', notifErr);
     }
 
     return NextResponse.json(data || []);
   }
 
   // ─── Mode simple : body est un objet ───
+  console.log('📝 [API] Single shift mode');
+
   const { organizationId, employee_id, date, start_time, end_time, hours } = body;
 
   if (!organizationId || !employee_id || !date || !start_time || !end_time) {
+    console.error('❌ [API] Missing required fields');
     return NextResponse.json(
       { error: 'Champs requis manquants' },
       { status: 400 }
@@ -152,14 +167,17 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    console.error('Erreur création shift:', error);
+    console.error('❌ [API] Shift creation error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  console.log('✅ [API] Shift created:', data.id);
 
   // Notification non-bloquante
   try {
     const empInfo = await lookupEmployee(supabase, employee_id);
     if (empInfo) {
+      console.log(`📧 [API] Triggering notification for ${empInfo.name} (${empInfo.email})`);
       await NotificationService.send({
         type: 'shift_created',
         priority: 'normal',
@@ -172,9 +190,12 @@ export async function POST(request: NextRequest) {
         actionUrl: '/planning',
         data: { date, startTime: start_time, endTime: end_time, hours: hours || 0 },
       });
+      console.log('✅ [API] Notification triggered');
+    } else {
+      console.warn('⚠️ [API] Employee not found, skipping notification');
     }
   } catch (notifErr) {
-    console.error('[Shifts] Erreur notification (non-bloquante):', notifErr);
+    console.error('❌ [API] Notification error (non-blocking):', notifErr);
   }
 
   return NextResponse.json(data);
@@ -182,12 +203,16 @@ export async function POST(request: NextRequest) {
 
 /** PUT — Mettre à jour un shift */
 export async function PUT(request: NextRequest) {
+  console.log('🟡 [API] PUT /api/shifts');
+
   const { searchParams } = new URL(request.url);
   const shiftId = searchParams.get('id');
 
   if (!shiftId) {
     return NextResponse.json({ error: 'id requis' }, { status: 400 });
   }
+
+  console.log('📝 [API] Updating shift:', shiftId);
 
   const body = await request.json();
   const updates: Record<string, unknown> = {};
@@ -208,9 +233,11 @@ export async function PUT(request: NextRequest) {
     .single();
 
   if (error) {
-    console.error('Erreur mise à jour shift:', error);
+    console.error('❌ [API] Shift update error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  console.log('✅ [API] Shift updated');
 
   // Notification non-bloquante : shift modifie
   try {
@@ -220,6 +247,7 @@ export async function PUT(request: NextRequest) {
       const orgId = shiftData.organization_id as string;
       const empInfo = await lookupEmployee(supabase, empId);
       if (empInfo) {
+        console.log(`📧 [API] Triggering shift_updated notification for ${empInfo.name}`);
         await NotificationService.send({
           type: 'shift_updated',
           priority: 'normal',
@@ -237,10 +265,13 @@ export async function PUT(request: NextRequest) {
             hours: (shiftData.hours as number) || 0,
           },
         });
+        console.log('✅ [API] Notification sent');
+      } else {
+        console.warn('⚠️ [API] Employee not found, skipping notification');
       }
     }
   } catch (notifErr) {
-    console.error('[Shifts] Erreur notification PUT (non-bloquante):', notifErr);
+    console.error('❌ [API] Notification PUT error (non-blocking):', notifErr);
   }
 
   return NextResponse.json(data);
@@ -248,12 +279,16 @@ export async function PUT(request: NextRequest) {
 
 /** DELETE — Supprimer un shift */
 export async function DELETE(request: NextRequest) {
+  console.log('🔴 [API] DELETE /api/shifts');
+
   const { searchParams } = new URL(request.url);
   const shiftId = searchParams.get('id');
 
   if (!shiftId) {
     return NextResponse.json({ error: 'id requis' }, { status: 400 });
   }
+
+  console.log('🗑️ [API] Deleting shift:', shiftId);
 
   const supabase = getServiceClient();
 
@@ -270,9 +305,12 @@ export async function DELETE(request: NextRequest) {
     if (shiftData) {
       shiftInfo = shiftData;
       empInfo = await lookupEmployee(supabase, shiftData.employee_id);
+      console.log('✅ [API] Shift info fetched before deletion');
+    } else {
+      console.warn('⚠️ [API] Shift not found for pre-delete lookup');
     }
   } catch {
-    // Non-bloquant
+    console.warn('⚠️ [API] Could not lookup shift before deletion');
   }
 
   const { error } = await supabase
@@ -281,13 +319,16 @@ export async function DELETE(request: NextRequest) {
     .eq('id', shiftId);
 
   if (error) {
-    console.error('Erreur suppression shift:', error);
+    console.error('❌ [API] Shift deletion error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  console.log('✅ [API] Shift deleted');
 
   // Notification non-bloquante : shift supprime
   try {
     if (shiftInfo && empInfo) {
+      console.log(`📧 [API] Triggering shift_deleted notification for ${empInfo.name}`);
       await NotificationService.send({
         type: 'shift_deleted',
         priority: 'normal',
@@ -304,9 +345,12 @@ export async function DELETE(request: NextRequest) {
           endTime: shiftInfo.end_time as string,
         },
       });
+      console.log('✅ [API] Notification sent');
+    } else {
+      console.warn('⚠️ [API] Missing shift/employee info, skipping notification');
     }
   } catch (notifErr) {
-    console.error('[Shifts] Erreur notification DELETE (non-bloquante):', notifErr);
+    console.error('❌ [API] Notification DELETE error (non-blocking):', notifErr);
   }
 
   return NextResponse.json({ success: true });

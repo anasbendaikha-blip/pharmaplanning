@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "seed": "tsx scripts/seed.ts",
+    "test:notifications": "tsx scripts/test-notifications.ts",
     "lint": "eslint ."
   },
   "dependencies": {

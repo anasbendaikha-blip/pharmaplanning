@@ -63,11 +63,21 @@ export class NotificationService {
    * Non-bloquant : les erreurs sont loguees mais ne propagent pas.
    */
   static async send(payload: NotificationPayload): Promise<void> {
+    console.log('🔔 [NotificationService] send() called');
+    console.log('📧 [NotificationService] Type:', payload.type);
+    console.log('👤 [NotificationService] Recipient:', payload.recipientEmail);
+
     try {
+      console.log('⚙️ [NotificationService] Fetching employee preferences...');
       const prefs = await this.getEmployeePreferences(
         payload.organizationId,
         payload.employeeId,
       );
+
+      console.log('✅ [NotificationService] Preferences loaded:', {
+        emailEnabled: prefs.email_enabled,
+        inAppEnabled: prefs.in_app_enabled,
+      });
 
       const typePrefs = prefs.types[payload.type as NotificationType];
       const emailEnabled = prefs.email_enabled && (typePrefs?.email ?? true);
@@ -75,30 +85,49 @@ export class NotificationService {
 
       // Email
       if (emailEnabled) {
+        console.log('📧 [NotificationService] Sending email notification...');
         await this.sendEmailNotification(payload);
+      } else {
+        console.log('🔕 [NotificationService] Email disabled for type:', payload.type);
       }
 
       // In-app
       if (inAppEnabled) {
+        console.log('📱 [NotificationService] Saving in-app notification...');
         await this.saveInAppNotification(payload);
+      } else {
+        console.log('🔕 [NotificationService] In-app disabled for type:', payload.type);
       }
+
+      console.log('✅ [NotificationService] Notification processed successfully');
     } catch (err) {
-      console.error('[NotificationService] Erreur send:', err);
+      console.error('❌ [NotificationService] Erreur send:', err);
     }
   }
 
   /** Envoyer un email selon le type de notification */
   private static async sendEmailNotification(payload: NotificationPayload): Promise<void> {
     try {
+      console.log('📧 [Email] Looking for template:', payload.type);
+
       const template = this.getEmailTemplate(payload);
       if (!template) {
-        console.warn('[NotificationService] Pas de template email pour:', payload.type);
+        console.warn('⚠️ [Email] No template found for type:', payload.type);
         return;
       }
 
-      await sendEmail(payload.recipientEmail, template);
+      console.log('✅ [Email] Template found, subject:', template.subject);
+      console.log('📧 [Email] Sending to:', payload.recipientEmail);
+
+      const result = await sendEmail(payload.recipientEmail, template);
+
+      if (result.success) {
+        console.log('✅ [Email] Sent successfully to', payload.recipientEmail);
+      } else {
+        console.error('❌ [Email] Failed:', result.error);
+      }
     } catch (err) {
-      console.error('[NotificationService] Erreur email:', err);
+      console.error('❌ [Email] Exception:', err);
     }
   }
 
@@ -186,6 +215,8 @@ export class NotificationService {
   /** Sauvegarder une notification in-app en BDD */
   private static async saveInAppNotification(payload: NotificationPayload): Promise<void> {
     try {
+      console.log('📱 [InApp] Saving to database...');
+
       const supabase = getServiceClient();
 
       const { error } = await supabase.from('notifications').insert({
@@ -201,10 +232,12 @@ export class NotificationService {
       });
 
       if (error) {
-        console.error('[NotificationService] Erreur insert notification:', error);
+        console.error('❌ [InApp] Database error:', error);
+      } else {
+        console.log('✅ [InApp] Saved successfully');
       }
     } catch (err) {
-      console.error('[NotificationService] Erreur saveInApp:', err);
+      console.error('❌ [InApp] Exception:', err);
     }
   }
 
@@ -224,6 +257,7 @@ export class NotificationService {
         .single();
 
       if (data) {
+        console.log('✅ [Preferences] Found preferences for employee:', employeeId);
         return {
           email_enabled: data.email_enabled,
           in_app_enabled: data.in_app_enabled,
@@ -234,11 +268,14 @@ export class NotificationService {
       // Pas de preferences trouvees, utiliser le defaut
     }
 
+    console.log('ℹ️ [Preferences] No preferences found, using defaults for:', employeeId);
     return getDefaultPreferences();
   }
 
   /** Envoi en lot (pour les notifications batch comme shift_created x N) */
   static async sendBulk(payloads: NotificationPayload[]): Promise<void> {
+    console.log(`🔔 [NotificationService] Sending ${payloads.length} notifications in bulk`);
     await Promise.allSettled(payloads.map(p => this.send(p)));
+    console.log('✅ [NotificationService] Bulk send complete');
   }
 }
