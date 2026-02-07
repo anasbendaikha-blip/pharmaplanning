@@ -50,9 +50,48 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(data || []);
 }
 
-/** POST — Créer un shift */
+/** POST — Créer un shift (ou batch si body est un tableau) */
 export async function POST(request: NextRequest) {
   const body = await request.json();
+
+  const supabase = getServiceClient();
+
+  // ─── Mode batch : body est un tableau ───
+  if (Array.isArray(body)) {
+    const shifts = body.map((item: Record<string, unknown>) => ({
+      organization_id: item.organizationId as string,
+      employee_id: item.employee_id as string,
+      date: item.date as string,
+      start_time: item.start_time as string,
+      end_time: item.end_time as string,
+      hours: (item.hours as number) || 0,
+      type: (item.type as string) || 'work',
+      validated: false,
+    }));
+
+    // Validation
+    const invalid = shifts.some(s => !s.organization_id || !s.employee_id || !s.date || !s.start_time || !s.end_time);
+    if (invalid) {
+      return NextResponse.json(
+        { error: 'Champs requis manquants dans le batch' },
+        { status: 400 }
+      );
+    }
+
+    const { data, error } = await supabase
+      .from('shifts')
+      .insert(shifts)
+      .select();
+
+    if (error) {
+      console.error('Erreur batch insert shifts:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json(data || []);
+  }
+
+  // ─── Mode simple : body est un objet ───
   const { organizationId, employee_id, date, start_time, end_time, hours } = body;
 
   if (!organizationId || !employee_id || !date || !start_time || !end_time) {
@@ -61,8 +100,6 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-
-  const supabase = getServiceClient();
 
   const { data, error } = await supabase
     .from('shifts')

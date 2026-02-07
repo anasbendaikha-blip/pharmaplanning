@@ -19,6 +19,7 @@ import type { GardeAssignment, RotationConfig, PharmacienStats } from '@/lib/gar
 import type { Shift } from '@/lib/types';
 import { toISODateString, formatDate, parseISODate } from '@/lib/utils/dateUtils';
 import Link from 'next/link';
+import { exportGardesPDF } from '@/lib/export/pdf-generator';
 
 type ViewMode = 'calendar' | 'stats' | 'config';
 
@@ -28,7 +29,8 @@ const MONTH_NAMES = [
 ];
 
 export default function GardesPage() {
-  const { organizationId, isLoading: orgLoading } = useOrganization();
+  const { organizationId, organization, isLoading: orgLoading } = useOrganization();
+  const organizationName = organization?.name || 'Pharmacie';
   const [view, setView] = useState<ViewMode>('calendar');
   const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(new Date().getMonth());
@@ -123,9 +125,9 @@ export default function GardesPage() {
     }
   };
 
-  // Export placeholder
+  // Export PDF
   const handleExportPDF = () => {
-    window.alert('Export PDF sera disponible prochainement (jsPDF)');
+    exportGardesPDF(monthGardes, month, year, organizationName);
   };
 
   // Gardes du mois courant

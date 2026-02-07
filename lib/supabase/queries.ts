@@ -309,44 +309,174 @@ export async function deleteShift(shiftId: string): Promise<boolean> {
   }
 }
 
+// ─── BATCH SHIFT CREATION ───
+
 /**
- * Récupère les congés d'une période
+ * Crée plusieurs shifts en une seule requête (batch insert)
+ */
+export async function createShiftsBatch(
+  organizationId: string,
+  shifts: Array<{
+    employee_id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    hours: number;
+  }>,
+): Promise<Shift[]> {
+  try {
+    const payload = shifts.map((s) => ({
+      organizationId,
+      employee_id: s.employee_id,
+      date: s.date,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      hours: s.hours,
+    }));
+
+    const res = await fetch('/api/shifts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      console.error('Erreur batch création shifts:', err);
+      return [];
+    }
+
+    const data: DbShift[] = await res.json();
+    return data.map(dbShiftToShift);
+  } catch (error) {
+    console.error('Erreur batch création shifts:', error);
+    return [];
+  }
+}
+
+// ─── LEAVE REQUESTS (CONGÉS) — via API Route ───
+
+export interface LeaveRequest {
+  id: string;
+  organization_id: string;
+  employee_id: string;
+  start_date: string;
+  end_date: string;
+  type: string;
+  status: string;
+  business_days: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * @deprecated Utiliser getLeaveRequests() à la place
  */
 export async function getLeaves(
   organizationId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
 ): Promise<Array<{ employee_id: string; start_date: string; end_date: string; type: string; status: string }>> {
-  // Pour l'instant, les congés passent toujours par l'API Supabase directement
-  // (à migrer vers une API Route si nécessaire)
+  const data = await getLeaveRequests(organizationId, startDate, endDate);
+  return data.map((r) => ({
+    employee_id: r.employee_id,
+    start_date: r.start_date,
+    end_date: r.end_date,
+    type: r.type,
+    status: r.status,
+  }));
+}
+
+/**
+ * Récupère les demandes de congés (via API Route)
+ */
+export async function getLeaveRequests(
+  organizationId: string,
+  startDate?: string,
+  endDate?: string,
+): Promise<LeaveRequest[]> {
   try {
-    const { createClient } = await import('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    const params = new URLSearchParams({ organizationId });
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
 
-    const { data, error } = await supabase
-      .from('leave_requests')
-      .select('*')
-      .eq('organization_id', organizationId)
-      .gte('end_date', startDate)
-      .lte('start_date', endDate);
-
-    if (error) {
-      console.error('Erreur chargement congés:', error);
-      return [];
-    }
-
-    return (data || []).map((row: Record<string, unknown>) => ({
-      employee_id: row.employee_id as string,
-      start_date: row.start_date as string,
-      end_date: row.end_date as string,
-      type: row.type as string,
-      status: row.status as string,
-    }));
+    const res = await fetch(`/api/leave-requests?${params.toString()}`);
+    if (!res.ok) return [];
+    return await res.json();
   } catch (error) {
     console.error('Erreur chargement congés:', error);
     return [];
+  }
+}
+
+/**
+ * Crée une demande de congé
+ */
+export async function createLeaveRequest(
+  organizationId: string,
+  leave: {
+    employee_id: string;
+    start_date: string;
+    end_date: string;
+    type: string;
+    business_days?: number;
+    notes?: string;
+  },
+): Promise<LeaveRequest | null> {
+  try {
+    const res = await fetch('/api/leave-requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ organizationId, ...leave }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (error) {
+    console.error('Erreur création congé:', error);
+    return null;
+  }
+}
+
+/**
+ * Met à jour une demande de congé
+ */
+export async function updateLeaveRequest(
+  id: string,
+  updates: Partial<{
+    start_date: string;
+    end_date: string;
+    type: string;
+    status: string;
+    business_days: number;
+    notes: string;
+  }>,
+): Promise<LeaveRequest | null> {
+  try {
+    const res = await fetch(`/api/leave-requests?id=${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (error) {
+    console.error('Erreur mise à jour congé:', error);
+    return null;
+  }
+}
+
+/**
+ * Supprime une demande de congé
+ */
+export async function deleteLeaveRequest(id: string): Promise<boolean> {
+  try {
+    const res = await fetch(`/api/leave-requests?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch (error) {
+    console.error('Erreur suppression congé:', error);
+    return false;
   }
 }

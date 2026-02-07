@@ -26,11 +26,14 @@ import {
 } from '@/lib/utils/dateUtils';
 import { formatHours } from '@/lib/utils/hourUtils';
 import Link from 'next/link';
+import { exportRecapPDF } from '@/lib/export/pdf-generator';
+import { exportRecapExcel } from '@/lib/export/excel-generator';
 
 type ViewMode = 'employees' | 'days';
 
 export default function RecapHebdoPage() {
-  const { organizationId, isLoading: orgLoading } = useOrganization();
+  const { organizationId, organization, isLoading: orgLoading } = useOrganization();
+  const organizationName = organization?.name || 'Pharmacie';
 
   // Navigation semaine
   const [currentMonday, setCurrentMonday] = useState<Date>(() => getMonday(new Date()));
@@ -75,14 +78,14 @@ export default function RecapHebdoPage() {
   const todayMonday = getMonday(new Date());
   const isCurrentWeek = toISODateString(currentMonday) === toISODateString(todayMonday);
 
-  // Export placeholders
+  // Exports
   const handleExportPDF = () => {
-    // TODO: implémenter avec jsPDF
-    window.alert('Export PDF sera disponible prochainement (jsPDF)');
+    if (!summary) return;
+    exportRecapPDF(summary, organizationName);
   };
   const handleExportExcel = () => {
-    // TODO: implémenter avec xlsx
-    window.alert('Export Excel sera disponible prochainement (xlsx)');
+    if (!summary) return;
+    exportRecapExcel(summary, organizationName);
   };
 
   if (orgLoading || (isLoading && !summary)) {

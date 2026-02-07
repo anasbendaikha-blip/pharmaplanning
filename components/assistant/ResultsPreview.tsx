@@ -1,7 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { GeneratedSchedule, WizardConfig } from '@/lib/assistant/types';
+import type { Employee } from '@/lib/types';
+import { useOrganization } from '@/lib/supabase/client';
+import { getEmployees, createShiftsBatch } from '@/lib/supabase/queries';
+import { exportAssistantPDF } from '@/lib/export/pdf-generator';
 
 interface ResultsPreviewProps {
   schedule: GeneratedSchedule;
@@ -9,8 +13,15 @@ interface ResultsPreviewProps {
   onRegenerate: () => void;
 }
 
-export default function ResultsPreview({ schedule, config: _config, onRegenerate }: ResultsPreviewProps) {
+export default function ResultsPreview({ schedule, config, onRegenerate }: ResultsPreviewProps) {
+  const { organizationId, organization } = useOrganization();
+  const organizationName = organization?.name || 'Pharmacie';
+
   const [conflictFilter, setConflictFilter] = useState<string>('all');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   const { success, stats, conflicts } = schedule;
 
@@ -21,9 +32,52 @@ export default function ResultsPreview({ schedule, config: _config, onRegenerate
     ? conflicts
     : conflicts.filter((c) => c.type === conflictFilter);
 
-  const handleSave = () => {
-    // TODO: Implémenter sauvegarde dans Supabase (prochaine session)
-    alert('Sauvegarde du planning dans Supabase (prochaine session)');
+  // Charger les employés pour résolution des noms dans le PDF
+  const loadEmployees = useCallback(async () => {
+    if (!organizationId) return;
+    const emps = await getEmployees(organizationId);
+    setEmployees(emps);
+  }, [organizationId]);
+
+  useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
+
+  // ─── Sauvegarde dans Supabase ───
+  const handleSave = async () => {
+    if (!organizationId || saving || saved) return;
+
+    setSaving(true);
+    setSaveError(null);
+
+    try {
+      // Mapper GeneratedShift (camelCase) → DB shift format (snake_case)
+      const dbShifts = schedule.shifts.map((gs) => ({
+        employee_id: gs.employeeId,
+        date: gs.date,
+        start_time: gs.startTime,
+        end_time: gs.endTime,
+        hours: gs.hours,
+      }));
+
+      const result = await createShiftsBatch(organizationId, dbShifts);
+
+      if (result.length > 0) {
+        setSaved(true);
+      } else {
+        setSaveError('Aucun shift sauvegardé. Vérifiez les données.');
+      }
+    } catch (error) {
+      console.error('Erreur sauvegarde:', error);
+      setSaveError(error instanceof Error ? error.message : 'Erreur inconnue');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ─── Export PDF ───
+  const handleExportPDF = () => {
+    exportAssistantPDF(schedule, config, organizationName, employees);
   };
 
   return (
@@ -42,6 +96,28 @@ export default function ResultsPreview({ schedule, config: _config, onRegenerate
           </p>
         </div>
       </div>
+
+      {/* ─── Message de succès après sauvegarde ─── */}
+      {saved && (
+        <div className="save-success">
+          <span className="save-icon">{'\u2713'}</span>
+          <div>
+            <strong>{schedule.shifts.length} shifts enregistrés dans le planning !</strong>
+            <p className="save-detail">Les shifts sont maintenant visibles dans la page Planning.</p>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Erreur de sauvegarde ─── */}
+      {saveError && (
+        <div className="save-error">
+          <span className="save-icon">{'\u26A0'}</span>
+          <div>
+            <strong>Erreur lors de la sauvegarde</strong>
+            <p className="save-detail">{saveError}</p>
+          </div>
+        </div>
+      )}
 
       {/* ─── Statistiques ─── */}
       <div className="section">
@@ -151,13 +227,24 @@ export default function ResultsPreview({ schedule, config: _config, onRegenerate
         <button className="btn-regen" onClick={onRegenerate} type="button">
           {'\u21BB'} Regénérer
         </button>
+        <button className="btn-export" onClick={handleExportPDF} type="button">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Export PDF
+        </button>
         <button
           className="btn-save"
           onClick={handleSave}
-          disabled={!success}
+          disabled={!success || saving || saved}
           type="button"
         >
-          Enregistrer et appliquer
+          {saving
+            ? 'Enregistrement...'
+            : saved
+              ? '\u2713 Enregistré'
+              : 'Enregistrer et appliquer'}
         </button>
       </div>
 
@@ -206,6 +293,40 @@ export default function ResultsPreview({ schedule, config: _config, onRegenerate
           margin: 0;
           font-size: var(--font-size-sm);
           color: rgba(255,255,255,0.9);
+        }
+
+        /* ─── Save feedback ─── */
+        .save-success, .save-error {
+          display: flex;
+          align-items: flex-start;
+          gap: var(--spacing-3);
+          padding: var(--spacing-4) var(--spacing-5);
+          border-radius: var(--radius-md);
+          margin-bottom: var(--spacing-5);
+          font-size: var(--font-size-sm);
+        }
+
+        .save-success {
+          background: var(--color-primary-50);
+          border-left: 4px solid var(--color-primary-600);
+          color: var(--color-primary-800);
+        }
+
+        .save-error {
+          background: var(--color-danger-50);
+          border-left: 4px solid var(--color-danger-500);
+          color: var(--color-danger-800);
+        }
+
+        .save-icon {
+          font-size: var(--font-size-lg);
+          flex-shrink: 0;
+        }
+
+        .save-detail {
+          margin: var(--spacing-1) 0 0;
+          font-size: var(--font-size-xs);
+          opacity: 0.8;
         }
 
         /* ─── Section ─── */
@@ -383,7 +504,7 @@ export default function ResultsPreview({ schedule, config: _config, onRegenerate
           gap: var(--spacing-3);
         }
 
-        .btn-regen, .btn-save {
+        .btn-regen, .btn-save, .btn-export {
           padding: 14px 28px;
           border: none;
           border-radius: var(--radius-md);
@@ -401,6 +522,21 @@ export default function ResultsPreview({ schedule, config: _config, onRegenerate
         }
 
         .btn-regen:hover { background: var(--color-neutral-200); }
+
+        .btn-export {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-2);
+          background: white;
+          border: 2px solid var(--color-neutral-200);
+          color: var(--color-neutral-700);
+        }
+
+        .btn-export:hover {
+          border-color: var(--color-primary-300);
+          color: var(--color-primary-700);
+          background: var(--color-primary-50);
+        }
 
         .btn-save {
           background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
@@ -425,7 +561,7 @@ export default function ResultsPreview({ schedule, config: _config, onRegenerate
           .stats-grid { grid-template-columns: 1fr; }
           .conflicts-header { flex-direction: column; align-items: flex-start; gap: var(--spacing-3); }
           .actions { flex-direction: column; }
-          .btn-regen, .btn-save { width: 100%; text-align: center; }
+          .btn-regen, .btn-save, .btn-export { width: 100%; text-align: center; justify-content: center; }
         }
       `}</style>
     </div>
