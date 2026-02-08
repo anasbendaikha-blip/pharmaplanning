@@ -1,30 +1,29 @@
 /**
- * GanttDayView — Vue Gantt par jour
+ * GanttDayView — Vue Gantt detaillee par jour
  *
- * Affiche une timeline horizontale 7h-20h avec les creneaux de chaque employe.
- * Zones de contexte : bleu fonce = ferme, jaune = pause dejeuner.
- * Clic sur zone vide -> creer creneau, clic sur barre -> editer.
+ * Timeline horizontale 7h-21h avec barres de creneaux par employe.
+ * Zone fermeture 12h30-13h30 (Lun-Ven) affichee en gris.
+ * Samedi : pas de fermeture, pauses affichees sur barres longues.
+ * Disponibilites etudiants : fond vert (dispo) / rouge (non dispo).
  *
- * Conventions : styled-jsx, prefix "gt-", pas d'emojis, ASCII uniquement.
+ * Conventions : styled-jsx, prefix "gd-", pas d'emojis, ASCII uniquement.
  */
 'use client';
 
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import type { Employee, Shift, EmployeeCategory } from '@/lib/types';
 import { formatHours } from '@/lib/utils/hourUtils';
 
-// ─── Constants ───
+// --- Constants ---
 
-/** Timeline commence a 7h, finit a 20h */
 const START_HOUR = 7;
-const END_HOUR = 20;
-const TOTAL_HOURS = END_HOUR - START_HOUR; // 13h
+const END_HOUR = 21;
+const TOTAL_HOURS = END_HOUR - START_HOUR; // 14h
+const HOUR_PX = 60; // pixels par heure
 
-/** Pharmacie ouverture/fermeture */
-const OPEN_TIME = '08:30';
-const CLOSE_TIME = '19:30';
-const PAUSE_START = '12:30';
-const PAUSE_END = '14:00';
+/** Fermeture midi Lun-Ven */
+const CLOSURE_START = '12:30';
+const CLOSURE_END = '13:30';
 
 /** Couleurs par categorie */
 const ROLE_COLORS: Record<EmployeeCategory, string> = {
@@ -37,15 +36,14 @@ const ROLE_COLORS: Record<EmployeeCategory, string> = {
 };
 
 const ROLE_LABELS: Record<EmployeeCategory, string> = {
-  pharmacien_titulaire: 'Ph. Tit.',
-  pharmacien_adjoint: 'Ph. Adj.',
-  preparateur: 'Prep.',
-  rayonniste: 'Ray.',
-  apprenti: 'App.',
-  etudiant: 'Etud.',
+  pharmacien_titulaire: 'Ph. Titulaire',
+  pharmacien_adjoint: 'Ph. Adjoint',
+  preparateur: 'Preparateur',
+  rayonniste: 'Rayonniste',
+  apprenti: 'Apprenti',
+  etudiant: 'Etudiant',
 };
 
-/** Ordre des categories */
 const CATEGORY_ORDER: EmployeeCategory[] = [
   'pharmacien_titulaire',
   'pharmacien_adjoint',
@@ -55,10 +53,16 @@ const CATEGORY_ORDER: EmployeeCategory[] = [
   'etudiant',
 ];
 
-/** Hauteur d'une ligne employe en px */
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 56;
+const BAR_HEIGHT = 32;
+const SIDEBAR_WIDTH = 180;
 
-// ─── Types ───
+// --- Types ---
+
+interface StudentAvailability {
+  employeeId: string;
+  available: boolean;
+}
 
 interface GanttDayViewProps {
   employees: Employee[];
@@ -67,11 +71,16 @@ interface GanttDayViewProps {
   todayStr: string;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
   onCreateAtTime: (employeeId: string, date: string, startTime: string) => void;
+  studentAvailabilities?: StudentAvailability[];
 }
 
-// ─── Helpers ───
+// --- Helpers ---
 
-/** Convertit "HH:MM" en position % sur la timeline */
+function timeToMinutes(time: string): number {
+  const [h, m] = time.split(':').map(Number);
+  return h * 60 + m;
+}
+
 function timeToPercent(time: string): number {
   const [h, m] = time.split(':').map(Number);
   const minutesFromStart = (h - START_HOUR) * 60 + m;
@@ -79,7 +88,6 @@ function timeToPercent(time: string): number {
   return Math.max(0, Math.min(100, (minutesFromStart / totalMinutes) * 100));
 }
 
-/** Convertit position % en "HH:MM" (arrondi au quart d'heure) */
 function percentToTime(percent: number): string {
   const totalMinutes = TOTAL_HOURS * 60;
   const minutesFromStart = (percent / 100) * totalMinutes;
@@ -89,15 +97,19 @@ function percentToTime(percent: number): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
-/** Calcule heures effectives d'un shift */
 function shiftEffectiveHours(shift: Shift): number {
-  const [sh, sm] = shift.start_time.split(':').map(Number);
-  const [eh, em] = shift.end_time.split(':').map(Number);
-  const totalMin = (eh * 60 + em) - (sh * 60 + sm) - (shift.break_duration || 0);
+  const startMin = timeToMinutes(shift.start_time);
+  const endMin = timeToMinutes(shift.end_time);
+  const totalMin = endMin - startMin - (shift.break_duration || 0);
   return Math.max(0, totalMin / 60);
 }
 
-/** Trier les employes par categorie puis par nom */
+function shiftDurationHours(shift: Shift): number {
+  const startMin = timeToMinutes(shift.start_time);
+  const endMin = timeToMinutes(shift.end_time);
+  return Math.max(0, (endMin - startMin) / 60);
+}
+
 function sortEmployees(employees: Employee[]): Employee[] {
   return [...employees].filter(e => e.is_active).sort((a, b) => {
     const catA = CATEGORY_ORDER.indexOf(a.category);
@@ -107,16 +119,21 @@ function sortEmployees(employees: Employee[]): Employee[] {
   });
 }
 
-/** Generer les heures pour l'axe */
-function generateHourMarks(): number[] {
-  const marks: number[] = [];
-  for (let h = START_HOUR; h <= END_HOUR; h++) {
-    marks.push(h);
-  }
-  return marks;
+function getDayOfWeek(dateStr: string): number {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d).getDay(); // 0=Dim, 6=Sam
 }
 
-// ─── Component ───
+function formatDateLong(dateStr: string): string {
+  const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+  const months = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  return `${days[date.getDay()]} ${d} ${months[m - 1]} ${y}`;
+}
+
+// --- Component ---
 
 export default function GanttDayView({
   employees,
@@ -125,17 +142,20 @@ export default function GanttDayView({
   todayStr,
   onCellClick,
   onCreateAtTime,
+  studentAvailabilities = [],
 }: GanttDayViewProps) {
   const [hoveredShiftId, setHoveredShiftId] = useState<string | null>(null);
-  const [tooltipShift, setTooltipShift] = useState<{ shift: Shift; x: number; y: number } | null>(null);
-  const timelineRef = useRef<HTMLDivElement>(null);
+  const [tooltipData, setTooltipData] = useState<{ shift: Shift; emp: Employee; x: number; y: number } | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const isToday = date === todayStr;
+  const dayOfWeek = getDayOfWeek(date);
+  const isSaturday = dayOfWeek === 6;
+  const isSunday = dayOfWeek === 0;
+  const showClosure = !isSaturday && !isSunday; // Fermeture seulement Lun-Ven
 
-  // Employes tries
   const sortedEmployees = useMemo(() => sortEmployees(employees), [employees]);
 
-  // Index shifts par employeeId
   const shiftsByEmployee = useMemo(() => {
     const map = new Map<string, Shift[]>();
     const dayShifts = shifts.filter(s => s.date === date);
@@ -147,27 +167,50 @@ export default function GanttDayView({
     return map;
   }, [shifts, date]);
 
-  // Stats du jour
-  const dayStats = useMemo(() => {
-    const dayShifts = shifts.filter(s => s.date === date);
-    const uniqueEmployees = new Set(dayShifts.map(s => s.employee_id)).size;
-    const totalHours = dayShifts.reduce((sum, s) => sum + shiftEffectiveHours(s), 0);
-    return { present: uniqueEmployees, totalHours };
-  }, [shifts, date]);
+  // Availability map for students
+  const availabilityMap = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const sa of studentAvailabilities) {
+      map.set(sa.employeeId, sa.available);
+    }
+    return map;
+  }, [studentAvailabilities]);
 
-  // Heure courante (pour l'indicateur "now")
-  const nowPercent = useMemo(() => {
-    if (!isToday) return -1;
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const p = timeToPercent(time);
-    return p > 0 && p < 100 ? p : -1;
+  // Now indicator
+  const [nowPercent, setNowPercent] = useState(-1);
+  useEffect(() => {
+    function updateNow() {
+      if (!isToday) { setNowPercent(-1); return; }
+      const now = new Date();
+      const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const p = timeToPercent(time);
+      setNowPercent(p > 0 && p < 100 ? p : -1);
+    }
+    updateNow();
+    const interval = setInterval(updateNow, 60000);
+    return () => clearInterval(interval);
   }, [isToday]);
 
-  // Marks heures
-  const hourMarks = useMemo(() => generateHourMarks(), []);
+  // Hour marks
+  const hourMarks = useMemo(() => {
+    const marks: number[] = [];
+    for (let h = START_HOUR; h <= END_HOUR; h++) marks.push(h);
+    return marks;
+  }, []);
 
-  // ─── Handlers ───
+  // Closure zone positions
+  const closureZone = useMemo(() => {
+    if (!showClosure) return null;
+    return {
+      left: timeToPercent(CLOSURE_START),
+      width: timeToPercent(CLOSURE_END) - timeToPercent(CLOSURE_START),
+    };
+  }, [showClosure]);
+
+  // Timeline width in pixels
+  const timelineWidth = TOTAL_HOURS * HOUR_PX;
+
+  // --- Handlers ---
 
   const handleBarClick = useCallback((e: React.MouseEvent, employeeId: string, shift: Shift) => {
     e.stopPropagation();
@@ -175,11 +218,7 @@ export default function GanttDayView({
   }, [onCellClick, date]);
 
   const handleRowClick = useCallback((e: React.MouseEvent, employeeId: string) => {
-    if (!timelineRef.current) return;
-    const rect = timelineRef.current.getBoundingClientRect();
-    // Calculer la position relative dans la zone timeline
-    // La sidebar fait ~180px, on doit la soustraire
-    const timelineArea = e.currentTarget.querySelector('.gt-row-timeline') as HTMLElement;
+    const timelineArea = (e.currentTarget as HTMLElement).querySelector('.gd-row-timeline') as HTMLElement;
     if (!timelineArea) return;
     const areaRect = timelineArea.getBoundingClientRect();
     const relativeX = e.clientX - areaRect.left;
@@ -188,289 +227,335 @@ export default function GanttDayView({
     onCreateAtTime(employeeId, date, clickTime);
   }, [date, onCreateAtTime]);
 
-  const handleBarMouseEnter = useCallback((e: React.MouseEvent, shift: Shift) => {
+  const handleBarMouseEnter = useCallback((e: React.MouseEvent, shift: Shift, emp: Employee) => {
     setHoveredShiftId(shift.id);
-    setTooltipShift({ shift, x: e.clientX, y: e.clientY });
+    setTooltipData({ shift, emp, x: e.clientX, y: e.clientY });
   }, []);
 
   const handleBarMouseLeave = useCallback(() => {
     setHoveredShiftId(null);
-    setTooltipShift(null);
-  }, []);
-
-  // ─── Zones contexte (positions %) ───
-  const zones = useMemo(() => {
-    return {
-      closedBefore: { left: 0, width: timeToPercent(OPEN_TIME) },
-      closedAfter: { left: timeToPercent(CLOSE_TIME), width: 100 - timeToPercent(CLOSE_TIME) },
-      pause: { left: timeToPercent(PAUSE_START), width: timeToPercent(PAUSE_END) - timeToPercent(PAUSE_START) },
-    };
+    setTooltipData(null);
   }, []);
 
   return (
     <>
-      <div className="gt-container" ref={timelineRef}>
-        {/* ─── Timeline Header ─── */}
-        <div className="gt-header">
-          <div className="gt-header-name">Employe</div>
-          <div className="gt-header-timeline">
-            {/* Zones de contexte dans le header */}
-            <div className="gt-zone gt-zone--closed" style={{ left: `${zones.closedBefore.left}%`, width: `${zones.closedBefore.width}%` }} />
-            <div className="gt-zone gt-zone--pause" style={{ left: `${zones.pause.left}%`, width: `${zones.pause.width}%` }} />
-            <div className="gt-zone gt-zone--closed" style={{ left: `${zones.closedAfter.left}%`, width: `${zones.closedAfter.width}%` }} />
-
-            {/* Marqueurs d'heures */}
-            {hourMarks.map(h => (
-              <div
-                key={h}
-                className="gt-hour-mark"
-                style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`)}%` }}
-              >
-                <span className="gt-hour-label">{h}h</span>
-              </div>
-            ))}
-
-            {/* Indicateur "maintenant" */}
-            {nowPercent > 0 && (
-              <div className="gt-now-line" style={{ left: `${nowPercent}%` }}>
-                <div className="gt-now-dot" />
-              </div>
-            )}
-          </div>
+      <div className="gd-container">
+        {/* Date title */}
+        <div className="gd-date-title">
+          {formatDateLong(date).toUpperCase()}
         </div>
 
-        {/* ─── Body : lignes employes ─── */}
-        <div className="gt-body">
-          {sortedEmployees.length === 0 ? (
-            <div className="gt-empty">
-              <p>Aucun employe actif</p>
+        {/* Timeline header + body in scrollable container */}
+        <div className="gd-scroll-wrap" ref={scrollContainerRef}>
+          {/* Header */}
+          <div className="gd-header">
+            <div className="gd-header-name">EMPLOYE</div>
+            <div className="gd-header-timeline" style={{ minWidth: `${timelineWidth}px` }}>
+              {/* Closure zone in header */}
+              {closureZone && (
+                <div
+                  className="gd-closure gd-closure--header"
+                  style={{ left: `${closureZone.left}%`, width: `${closureZone.width}%` }}
+                />
+              )}
+
+              {/* Hour marks */}
+              {hourMarks.map(h => (
+                <div
+                  key={h}
+                  className="gd-hour-mark"
+                  style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`)}%` }}
+                >
+                  <span className="gd-hour-label">{h}h</span>
+                </div>
+              ))}
+
+              {/* Now line */}
+              {nowPercent > 0 && (
+                <div className="gd-now" style={{ left: `${nowPercent}%` }}>
+                  <div className="gd-now-dot" />
+                </div>
+              )}
             </div>
-          ) : (
-            sortedEmployees.map((emp, index) => {
-              const empShifts = shiftsByEmployee.get(emp.id) || [];
-              const prevCategory = index > 0 ? sortedEmployees[index - 1].category : null;
-              const showCategorySep = emp.category !== prevCategory;
-              const empDayHours = empShifts.reduce((sum, s) => sum + shiftEffectiveHours(s), 0);
+          </div>
 
-              return (
-                <div key={emp.id}>
-                  {/* Separateur categorie */}
-                  {showCategorySep && (
-                    <div className="gt-cat-sep">
-                      <span className="gt-cat-dot" style={{ backgroundColor: ROLE_COLORS[emp.category] }} />
-                      <span className="gt-cat-text">{ROLE_LABELS[emp.category]}</span>
-                    </div>
-                  )}
+          {/* Body rows */}
+          <div className="gd-body">
+            {sortedEmployees.length === 0 ? (
+              <div className="gd-empty">
+                <p>Aucun employe actif</p>
+              </div>
+            ) : (
+              sortedEmployees.map((emp, index) => {
+                const empShifts = shiftsByEmployee.get(emp.id) || [];
+                const prevCategory = index > 0 ? sortedEmployees[index - 1].category : null;
+                const showCategorySep = emp.category !== prevCategory;
+                const empDayHours = empShifts.reduce((sum, s) => sum + shiftEffectiveHours(s), 0);
 
-                  {/* Ligne employe */}
-                  <div
-                    className={`gt-row ${index % 2 === 0 ? 'gt-row--even' : ''}`}
-                    onClick={(e) => handleRowClick(e, emp.id)}
-                  >
-                    {/* Sidebar nom */}
-                    <div className="gt-row-name">
-                      <span className="gt-avatar" style={{ backgroundColor: ROLE_COLORS[emp.category] }}>
-                        {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
-                      </span>
-                      <div className="gt-name-text">
-                        <span className="gt-name-main">
-                          {emp.first_name} {emp.last_name.charAt(0)}.
-                        </span>
-                        {empDayHours > 0 && (
-                          <span className="gt-name-hours">{formatHours(empDayHours)}</span>
-                        )}
+                // Student availability
+                const isStudent = emp.category === 'etudiant';
+                const hasAvailability = availabilityMap.has(emp.id);
+                const isAvailable = availabilityMap.get(emp.id) ?? true;
+
+                let rowBgClass = '';
+                if (isStudent && hasAvailability) {
+                  rowBgClass = isAvailable ? 'gd-row--available' : 'gd-row--unavailable';
+                }
+
+                return (
+                  <div key={emp.id}>
+                    {/* Category separator */}
+                    {showCategorySep && (
+                      <div className="gd-cat-sep">
+                        <span className="gd-cat-dot" style={{ backgroundColor: ROLE_COLORS[emp.category] }} />
+                        <span className="gd-cat-label">{ROLE_LABELS[emp.category]}</span>
                       </div>
-                    </div>
+                    )}
 
-                    {/* Timeline */}
-                    <div className="gt-row-timeline">
-                      {/* Zones de contexte */}
-                      <div className="gt-zone gt-zone--closed-row" style={{ left: `${zones.closedBefore.left}%`, width: `${zones.closedBefore.width}%` }} />
-                      <div className="gt-zone gt-zone--pause-row" style={{ left: `${zones.pause.left}%`, width: `${zones.pause.width}%` }} />
-                      <div className="gt-zone gt-zone--closed-row" style={{ left: `${zones.closedAfter.left}%`, width: `${zones.closedAfter.width}%` }} />
+                    {/* Employee row */}
+                    <div
+                      className={`gd-row ${rowBgClass} ${index % 2 === 0 ? 'gd-row--even' : ''}`}
+                      onClick={(e) => handleRowClick(e, emp.id)}
+                    >
+                      {/* Name sidebar */}
+                      <div className="gd-row-name">
+                        <span className="gd-avatar" style={{ backgroundColor: ROLE_COLORS[emp.category] }}>
+                          {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
+                        </span>
+                        <div className="gd-name-info">
+                          <span className="gd-name-text">
+                            {emp.first_name} {emp.last_name.charAt(0)}.
+                          </span>
+                          {empDayHours > 0 && (
+                            <span className="gd-name-hours">{formatHours(empDayHours)}</span>
+                          )}
+                          {isStudent && hasAvailability && empShifts.length === 0 && (
+                            <span className={`gd-dispo-text ${isAvailable ? 'gd-dispo-text--yes' : 'gd-dispo-text--no'}`}>
+                              {isAvailable ? 'Disponible' : 'Non dispo'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
 
-                      {/* Lignes verticales demi-heures */}
-                      {hourMarks.map(h => (
-                        <div
-                          key={h}
-                          className="gt-gridline"
-                          style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`)}%` }}
-                        />
-                      ))}
-
-                      {/* Indicateur now */}
-                      {nowPercent > 0 && (
-                        <div className="gt-now-line-row" style={{ left: `${nowPercent}%` }} />
-                      )}
-
-                      {/* Barres de creneaux */}
-                      {empShifts.map(shift => {
-                        const left = timeToPercent(shift.start_time);
-                        const right = timeToPercent(shift.end_time);
-                        const width = right - left;
-                        const isHovered = hoveredShiftId === shift.id;
-                        const hours = shiftEffectiveHours(shift);
-                        const isSpecial = shift.type === 'garde' || shift.type === 'formation' || shift.type === 'conge' || shift.type === 'maladie';
-
-                        return (
+                      {/* Timeline area */}
+                      <div className="gd-row-timeline" style={{ minWidth: `${timelineWidth}px` }}>
+                        {/* Closure zone */}
+                        {closureZone && (
                           <div
-                            key={shift.id}
-                            className={`gt-bar ${isHovered ? 'gt-bar--hovered' : ''} ${isSpecial ? 'gt-bar--special' : ''}`}
-                            style={{
-                              left: `${left}%`,
-                              width: `${Math.max(width, 1)}%`,
-                              backgroundColor: ROLE_COLORS[emp.category],
-                            }}
-                            onClick={(e) => handleBarClick(e, emp.id, shift)}
-                            onMouseEnter={(e) => handleBarMouseEnter(e, shift)}
-                            onMouseLeave={handleBarMouseLeave}
-                            title={`${shift.start_time}-${shift.end_time} (${formatHours(hours)})`}
+                            className="gd-closure gd-closure--row"
+                            style={{ left: `${closureZone.left}%`, width: `${closureZone.width}%` }}
                           >
-                            {width > 8 && (
-                              <span className="gt-bar-text">
+                            <span className="gd-closure-label">FERME</span>
+                          </div>
+                        )}
+
+                        {/* Grid lines */}
+                        {hourMarks.map(h => (
+                          <div
+                            key={h}
+                            className="gd-gridline"
+                            style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`)}%` }}
+                          />
+                        ))}
+
+                        {/* Now indicator */}
+                        {nowPercent > 0 && (
+                          <div className="gd-now-row" style={{ left: `${nowPercent}%` }} />
+                        )}
+
+                        {/* Student availability background text */}
+                        {isStudent && hasAvailability && empShifts.length === 0 && (
+                          <div className={`gd-avail-bg ${isAvailable ? 'gd-avail-bg--yes' : 'gd-avail-bg--no'}`}>
+                            {isAvailable ? 'Disponible toute la journee' : 'Non disponible'}
+                          </div>
+                        )}
+
+                        {/* Shift bars */}
+                        {empShifts.map(shift => {
+                          const left = timeToPercent(shift.start_time);
+                          const right = timeToPercent(shift.end_time);
+                          const width = right - left;
+                          const isHovered = hoveredShiftId === shift.id;
+                          const hours = shiftEffectiveHours(shift);
+                          const duration = shiftDurationHours(shift);
+                          const showPauseBadge = shift.break_duration > 0 && (isSaturday || duration >= 6);
+
+                          return (
+                            <div
+                              key={shift.id}
+                              className={`gd-bar ${isHovered ? 'gd-bar--hover' : ''}`}
+                              style={{
+                                left: `${left}%`,
+                                width: `${Math.max(width, 1.5)}%`,
+                                backgroundColor: ROLE_COLORS[emp.category],
+                              }}
+                              onClick={(e) => handleBarClick(e, emp.id, shift)}
+                              onMouseEnter={(e) => handleBarMouseEnter(e, shift, emp)}
+                              onMouseLeave={handleBarMouseLeave}
+                            >
+                              <span className="gd-bar-time">
                                 {shift.start_time}-{shift.end_time}
                               </span>
-                            )}
-                            {width > 15 && hours > 0 && (
-                              <span className="gt-bar-hours">{formatHours(hours)}</span>
-                            )}
-                          </div>
-                        );
-                      })}
+                              {showPauseBadge && (
+                                <span className="gd-bar-pause">
+                                  P {shift.break_duration}min
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        {/* ─── Legende ─── */}
-        <div className="gt-legend">
-          {CATEGORY_ORDER.filter(cat => sortedEmployees.some(e => e.category === cat)).map(cat => (
-            <div key={cat} className="gt-legend-item">
-              <span className="gt-legend-dot" style={{ backgroundColor: ROLE_COLORS[cat] }} />
-              <span className="gt-legend-text">{ROLE_LABELS[cat]}</span>
-            </div>
-          ))}
-          <div className="gt-legend-sep" />
-          <div className="gt-legend-item">
-            <span className="gt-legend-zone gt-legend-zone--closed" />
-            <span className="gt-legend-text">Ferme</span>
-          </div>
-          <div className="gt-legend-item">
-            <span className="gt-legend-zone gt-legend-zone--pause" />
-            <span className="gt-legend-text">Pause</span>
+                );
+              })
+            )}
           </div>
         </div>
       </div>
 
-      {/* ─── Tooltip ─── */}
-      {tooltipShift && (
+      {/* Tooltip */}
+      {tooltipData && (
         <div
-          className="gt-tooltip"
-          style={{ left: tooltipShift.x + 12, top: tooltipShift.y - 10 }}
+          className="gd-tooltip"
+          style={{ left: tooltipData.x + 12, top: tooltipData.y - 10 }}
         >
-          <div className="gt-tooltip-time">
-            {tooltipShift.shift.start_time} - {tooltipShift.shift.end_time}
+          <div className="gd-tooltip-name">
+            {tooltipData.emp.first_name} {tooltipData.emp.last_name}
           </div>
-          <div className="gt-tooltip-info">
-            {formatHours(shiftEffectiveHours(tooltipShift.shift))} effectives
-            {tooltipShift.shift.break_duration > 0 && ` | Pause ${tooltipShift.shift.break_duration}min`}
+          <div className="gd-tooltip-role">{ROLE_LABELS[tooltipData.emp.category]}</div>
+          <div className="gd-tooltip-time">
+            {tooltipData.shift.start_time} - {tooltipData.shift.end_time}
           </div>
-          {tooltipShift.shift.notes && (
-            <div className="gt-tooltip-notes">{tooltipShift.shift.notes}</div>
+          <div className="gd-tooltip-hours">
+            {formatHours(shiftEffectiveHours(tooltipData.shift))} effectives
+            {tooltipData.shift.break_duration > 0 && ` | Pause ${tooltipData.shift.break_duration}min`}
+          </div>
+          {tooltipData.shift.notes && (
+            <div className="gd-tooltip-notes">{tooltipData.shift.notes}</div>
           )}
-          <div className="gt-tooltip-hint">Cliquer pour editer</div>
+          <div className="gd-tooltip-hint">Cliquer pour editer</div>
         </div>
       )}
 
       <style jsx>{`
-        .gt-container {
+        .gd-container {
           display: flex;
           flex-direction: column;
           height: 100%;
           background: white;
-          border: 1px solid var(--color-neutral-200);
-          border-radius: var(--radius-lg);
+          border: 1px solid var(--color-neutral-200, #e5e7eb);
+          border-radius: 8px;
           overflow: hidden;
         }
 
-        /* ═══ Header Timeline ═══ */
-        .gt-header {
-          display: flex;
-          border-bottom: 2px solid var(--color-neutral-200);
-          background: var(--color-neutral-50);
-          flex-shrink: 0;
+        /* Date title */
+        .gd-date-title {
+          padding: 10px 16px;
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: 0.08em;
+          color: var(--color-neutral-600, #4b5563);
+          background: var(--color-neutral-50, #f9fafb);
+          border-bottom: 1px solid var(--color-neutral-200, #e5e7eb);
         }
 
-        .gt-header-name {
-          width: 180px;
-          min-width: 140px;
+        /* Scroll wrapper */
+        .gd-scroll-wrap {
+          flex: 1;
+          overflow-x: auto;
+          overflow-y: auto;
+        }
+
+        /* Header */
+        .gd-header {
+          display: flex;
+          position: sticky;
+          top: 0;
+          z-index: 10;
+          background: var(--color-neutral-50, #f9fafb);
+          border-bottom: 2px solid var(--color-neutral-200, #e5e7eb);
+        }
+
+        .gd-header-name {
+          width: ${SIDEBAR_WIDTH}px;
+          min-width: ${SIDEBAR_WIDTH}px;
           padding: 8px 12px;
-          font-size: 11px;
+          font-size: 10px;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--color-neutral-500);
-          border-right: 1px solid var(--color-neutral-200);
+          letter-spacing: 0.06em;
+          color: var(--color-neutral-500, #6b7280);
+          border-right: 1px solid var(--color-neutral-200, #e5e7eb);
           display: flex;
           align-items: flex-end;
+          position: sticky;
+          left: 0;
+          z-index: 11;
+          background: var(--color-neutral-50, #f9fafb);
         }
 
-        .gt-header-timeline {
+        .gd-header-timeline {
           flex: 1;
           position: relative;
           height: 36px;
-          overflow: hidden;
         }
 
-        /* ═══ Hour marks ═══ */
-        .gt-hour-mark {
+        /* Hour marks */
+        .gd-hour-mark {
           position: absolute;
           top: 0;
           bottom: 0;
           width: 1px;
-          background: var(--color-neutral-200);
+          background: var(--color-neutral-200, #e5e7eb);
         }
 
-        .gt-hour-label {
+        .gd-hour-label {
           position: absolute;
           bottom: 4px;
           left: 4px;
           font-size: 10px;
           font-weight: 600;
-          color: var(--color-neutral-500);
+          color: var(--color-neutral-500, #6b7280);
           white-space: nowrap;
           user-select: none;
         }
 
-        /* ═══ Zones de contexte ═══ */
-        .gt-zone {
+        /* Closure zone (12h30-13h30) */
+        .gd-closure {
           position: absolute;
           top: 0;
           bottom: 0;
           pointer-events: none;
+          z-index: 1;
         }
 
-        .gt-zone--closed {
-          background: rgba(30, 58, 138, 0.08);
+        .gd-closure--header {
+          background: rgba(107, 114, 128, 0.12);
         }
 
-        .gt-zone--pause {
-          background: rgba(254, 240, 138, 0.5);
+        .gd-closure--row {
+          background: rgba(107, 114, 128, 0.08);
+          border-left: 2px dashed #9ca3af;
+          border-right: 2px dashed #9ca3af;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
 
-        .gt-zone--closed-row {
-          background: rgba(30, 58, 138, 0.06);
+        .gd-closure-label {
+          font-size: 9px;
+          font-weight: 700;
+          color: #6b7280;
+          letter-spacing: 1px;
+          writing-mode: vertical-lr;
+          text-orientation: mixed;
+          transform: rotate(180deg);
+          user-select: none;
         }
 
-        .gt-zone--pause-row {
-          background: rgba(254, 240, 138, 0.25);
-        }
-
-        /* ═══ Now indicator ═══ */
-        .gt-now-line {
+        /* Now indicator */
+        .gd-now {
           position: absolute;
           top: 0;
           bottom: 0;
@@ -479,7 +564,7 @@ export default function GanttDayView({
           z-index: 5;
         }
 
-        .gt-now-dot {
+        .gd-now-dot {
           position: absolute;
           top: -3px;
           left: -4px;
@@ -489,7 +574,7 @@ export default function GanttDayView({
           background: #dc2626;
         }
 
-        .gt-now-line-row {
+        .gd-now-row {
           position: absolute;
           top: 0;
           bottom: 0;
@@ -499,84 +584,99 @@ export default function GanttDayView({
           pointer-events: none;
         }
 
-        /* ═══ Body ═══ */
-        .gt-body {
-          flex: 1;
-          overflow-y: auto;
-          overflow-x: hidden;
+        /* Body */
+        .gd-body {
+          min-width: fit-content;
         }
 
-        .gt-empty {
+        .gd-empty {
           display: flex;
           align-items: center;
           justify-content: center;
           height: 200px;
-          color: var(--color-neutral-400);
+          color: var(--color-neutral-400, #9ca3af);
           font-size: 14px;
+          width: 100%;
         }
 
-        /* ═══ Category separator ═══ */
-        .gt-cat-sep {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 3px 12px;
-          background: var(--color-neutral-100);
-          border-bottom: 1px solid var(--color-neutral-200);
-        }
-
-        .gt-cat-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        .gt-cat-text {
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--color-neutral-500);
-        }
-
-        /* ═══ Row ═══ */
-        .gt-row {
-          display: flex;
-          height: ${ROW_HEIGHT}px;
-          border-bottom: 1px solid var(--color-neutral-100);
-          cursor: pointer;
-          transition: background 0.1s;
-        }
-
-        .gt-row:hover {
-          background: rgba(99, 102, 241, 0.03);
-        }
-
-        .gt-row--even {
-          background: rgba(0, 0, 0, 0.01);
-        }
-
-        .gt-row--even:hover {
-          background: rgba(99, 102, 241, 0.03);
-        }
-
-        /* ═══ Row name sidebar ═══ */
-        .gt-row-name {
-          width: 180px;
-          min-width: 140px;
+        /* Category separator */
+        .gd-cat-sep {
           display: flex;
           align-items: center;
           gap: 8px;
           padding: 4px 12px;
-          border-right: 1px solid var(--color-neutral-200);
-          overflow: hidden;
-          flex-shrink: 0;
+          background: var(--color-neutral-100, #f3f4f6);
+          border-bottom: 1px solid var(--color-neutral-200, #e5e7eb);
+          position: sticky;
+          left: 0;
         }
 
-        .gt-avatar {
-          width: 26px;
-          height: 26px;
+        .gd-cat-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+        }
+
+        .gd-cat-label {
+          font-size: 10px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--color-neutral-500, #6b7280);
+        }
+
+        /* Employee row */
+        .gd-row {
+          display: flex;
+          height: ${ROW_HEIGHT}px;
+          border-bottom: 1px solid var(--color-neutral-100, #f3f4f6);
+          cursor: pointer;
+          transition: background 0.1s;
+        }
+
+        .gd-row:hover {
+          background: rgba(99, 102, 241, 0.03);
+        }
+
+        .gd-row--even {
+          background: rgba(0, 0, 0, 0.01);
+        }
+
+        .gd-row--available {
+          background: #d1fae5 !important;
+        }
+
+        .gd-row--available:hover {
+          background: #a7f3d0 !important;
+        }
+
+        .gd-row--unavailable {
+          background: #fee2e2 !important;
+        }
+
+        .gd-row--unavailable:hover {
+          background: #fecaca !important;
+        }
+
+        /* Name sidebar */
+        .gd-row-name {
+          width: ${SIDEBAR_WIDTH}px;
+          min-width: ${SIDEBAR_WIDTH}px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 12px;
+          border-right: 1px solid var(--color-neutral-200, #e5e7eb);
+          overflow: hidden;
+          position: sticky;
+          left: 0;
+          z-index: 5;
+          background: inherit;
+        }
+
+        .gd-avatar {
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -585,176 +685,170 @@ export default function GanttDayView({
           font-weight: 700;
           color: white;
           flex-shrink: 0;
-          letter-spacing: 0.02em;
         }
 
-        .gt-name-text {
+        .gd-name-info {
           display: flex;
           flex-direction: column;
           overflow: hidden;
+          gap: 1px;
         }
 
-        .gt-name-main {
+        .gd-name-text {
           font-size: 12px;
           font-weight: 600;
-          color: var(--color-neutral-800);
+          color: var(--color-neutral-800, #1f2937);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
 
-        .gt-name-hours {
+        .gd-name-hours {
           font-size: 10px;
-          color: var(--color-neutral-400);
+          color: var(--color-neutral-400, #9ca3af);
           font-weight: 500;
         }
 
-        /* ═══ Row timeline ═══ */
-        .gt-row-timeline {
+        .gd-dispo-text {
+          font-size: 10px;
+          font-weight: 600;
+        }
+
+        .gd-dispo-text--yes {
+          color: #059669;
+        }
+
+        .gd-dispo-text--no {
+          color: #dc2626;
+        }
+
+        /* Timeline */
+        .gd-row-timeline {
           flex: 1;
           position: relative;
           overflow: hidden;
         }
 
-        .gt-gridline {
+        .gd-gridline {
           position: absolute;
           top: 0;
           bottom: 0;
           width: 1px;
-          background: var(--color-neutral-100);
+          background: var(--color-neutral-100, #f3f4f6);
           pointer-events: none;
         }
 
-        /* ═══ Shift bar ═══ */
-        .gt-bar {
+        /* Availability background text */
+        .gd-avail-bg {
           position: absolute;
-          top: 4px;
-          height: ${ROW_HEIGHT - 8}px;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 12px;
+          font-weight: 600;
+          pointer-events: none;
+          z-index: 1;
+        }
+
+        .gd-avail-bg--yes {
+          color: #059669;
+        }
+
+        .gd-avail-bg--no {
+          color: #dc2626;
+        }
+
+        /* Shift bar */
+        .gd-bar {
+          position: absolute;
+          top: ${(ROW_HEIGHT - BAR_HEIGHT) / 2}px;
+          height: ${BAR_HEIGHT}px;
           border-radius: 6px;
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
           color: white;
           cursor: pointer;
           z-index: 2;
           transition: transform 0.15s, box-shadow 0.15s;
           overflow: hidden;
           min-width: 4px;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
         }
 
-        .gt-bar:hover,
-        .gt-bar--hovered {
-          transform: translateY(-1px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        .gd-bar:hover,
+        .gd-bar--hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
           z-index: 4;
         }
 
-        .gt-bar--special {
-          border: 2px dashed rgba(255, 255, 255, 0.5);
-        }
-
-        .gt-bar-text {
-          font-size: 10px;
+        .gd-bar-time {
+          font-size: 11px;
           font-weight: 600;
           white-space: nowrap;
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+          padding: 0 6px;
         }
 
-        .gt-bar-hours {
+        .gd-bar-pause {
+          position: absolute;
+          bottom: 2px;
+          right: 4px;
           font-size: 9px;
           font-weight: 500;
-          opacity: 0.85;
+          opacity: 0.9;
           white-space: nowrap;
         }
 
-        /* ═══ Legend ═══ */
-        .gt-legend {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 6px 12px;
-          border-top: 1px solid var(--color-neutral-200);
-          background: var(--color-neutral-50);
-          flex-shrink: 0;
-          flex-wrap: wrap;
-        }
-
-        .gt-legend-item {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .gt-legend-dot {
-          width: 10px;
-          height: 10px;
-          border-radius: 3px;
-          flex-shrink: 0;
-        }
-
-        .gt-legend-zone {
-          width: 14px;
-          height: 10px;
-          border-radius: 2px;
-          flex-shrink: 0;
-        }
-
-        .gt-legend-zone--closed {
-          background: rgba(30, 58, 138, 0.15);
-          border: 1px solid rgba(30, 58, 138, 0.3);
-        }
-
-        .gt-legend-zone--pause {
-          background: rgba(254, 240, 138, 0.6);
-          border: 1px solid rgba(202, 138, 4, 0.3);
-        }
-
-        .gt-legend-text {
-          font-size: 10px;
-          color: var(--color-neutral-500);
-          font-weight: 500;
-        }
-
-        .gt-legend-sep {
-          width: 1px;
-          height: 14px;
-          background: var(--color-neutral-300);
-        }
-
-        /* ═══ Tooltip ═══ */
-        .gt-tooltip {
+        /* Tooltip */
+        .gd-tooltip {
           position: fixed;
           z-index: 50;
-          background: var(--color-neutral-900);
+          background: #1f2937;
           color: white;
-          border-radius: var(--radius-md);
-          padding: 8px 12px;
+          border-radius: 8px;
+          padding: 10px 14px;
           font-size: 12px;
           pointer-events: none;
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-          max-width: 240px;
+          max-width: 260px;
         }
 
-        .gt-tooltip-time {
+        .gd-tooltip-name {
           font-weight: 700;
           font-size: 13px;
         }
 
-        .gt-tooltip-info {
+        .gd-tooltip-role {
+          font-size: 11px;
+          opacity: 0.7;
+          margin-bottom: 4px;
+        }
+
+        .gd-tooltip-time {
+          font-weight: 600;
+          font-size: 13px;
+        }
+
+        .gd-tooltip-hours {
           font-size: 11px;
           opacity: 0.85;
           margin-top: 2px;
         }
 
-        .gt-tooltip-notes {
+        .gd-tooltip-notes {
           font-size: 10px;
           opacity: 0.7;
           margin-top: 4px;
           font-style: italic;
         }
 
-        .gt-tooltip-hint {
+        .gd-tooltip-hint {
           font-size: 9px;
           opacity: 0.5;
           margin-top: 6px;
@@ -762,23 +856,24 @@ export default function GanttDayView({
           letter-spacing: 0.05em;
         }
 
-        /* ═══ Print ═══ */
+        /* Print */
         @media print {
-          .gt-legend { display: none; }
-          .gt-container { border: none; }
-          .gt-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-          .gt-zone { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .gd-container { border: none; }
+          .gd-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .gd-closure { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .gd-row--available,
+          .gd-row--unavailable { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
 
-        /* ═══ Responsive ═══ */
+        /* Responsive */
         @media (max-width: 768px) {
-          .gt-header-name,
-          .gt-row-name {
-            width: 100px;
-            min-width: 80px;
+          .gd-header-name,
+          .gd-row-name {
+            width: 120px;
+            min-width: 120px;
           }
-          .gt-avatar { display: none; }
-          .gt-name-main { font-size: 11px; }
+          .gd-avatar { display: none; }
+          .gd-name-text { font-size: 11px; }
         }
       `}</style>
     </>
