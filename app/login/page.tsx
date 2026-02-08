@@ -28,10 +28,28 @@ export default function LoginPage() {
       if (authError) {
         if (authError.message === 'Invalid login credentials') {
           setError('Email ou mot de passe incorrect');
+        } else if (authError.message === 'Email not confirmed') {
+          setError('Veuillez activer votre compte via le lien recu par email');
         } else {
           setError(authError.message);
         }
       } else if (data.user) {
+        // Vérifier le rôle pour rediriger au bon endroit
+        try {
+          const roleRes = await fetch(`/api/auth/employee-role?userId=${encodeURIComponent(data.user.id)}`);
+          if (roleRes.ok) {
+            const roleData = await roleRes.json();
+            if (roleData.isEmployee && !roleData.isManager) {
+              // Employé non-manager → portail employé
+              router.push('/employe');
+              router.refresh();
+              return;
+            }
+          }
+        } catch {
+          // En cas d'erreur, on redirige par défaut
+        }
+        // Manager ou pas d'employé lié → dashboard manager
         router.push('/');
         router.refresh();
       }

@@ -27,6 +27,12 @@ interface DbEmployee {
   availability: Record<string, unknown>;
   preferences: Record<string, unknown>;
   status: string;
+  email: string | null;
+  user_id: string | null;
+  account_status: string | null;
+  invitation_sent_at: string | null;
+  invitation_accepted_at: string | null;
+  last_login_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -103,7 +109,7 @@ function dbEmployeeToEmployee(row: DbEmployee): Employee {
     organization_id: row.organization_id,
     first_name: firstName,
     last_name: lastName,
-    email: `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`,
+    email: row.email || `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`,
     phone: null,
     category: mapped.category,
     role: mapped.role,
@@ -122,7 +128,9 @@ function dbEmployeeToEmployee(row: DbEmployee): Employee {
       max_preferred_daily_hours: null,
       notes: null,
     },
-    user_id: null,
+    user_id: row.user_id || null,
+    account_status: row.account_status || null,
+    invitation_sent_at: row.invitation_sent_at || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

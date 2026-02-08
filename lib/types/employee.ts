@@ -41,8 +41,12 @@ export interface Employee {
   skills: string[];
   /** Préférences d'horaires */
   preferences: EmployeePreferences;
-  /** Lien vers le user Supabase Auth (si le portail employé est activé) */
+  /** Lien vers le user Supabase Auth (si le portail employe est active) */
   user_id: string | null;
+  /** Statut du compte : pending, active, suspended, deactivated */
+  account_status: string | null;
+  /** Date d'envoi de l'invitation email */
+  invitation_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }

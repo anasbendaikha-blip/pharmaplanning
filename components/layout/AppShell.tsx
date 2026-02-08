@@ -5,7 +5,7 @@ import Header from '@/components/layout/Header';
 import Navigation from '@/components/layout/Navigation';
 
 /** Routes où on n'affiche PAS le shell (Header + Nav) */
-const AUTH_ROUTES = ['/login', '/signup', '/forgot-password'];
+const AUTH_ROUTES = ['/login', '/signup', '/forgot-password', '/auth/activate'];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 /** Routes publiques ne nécessitant pas d'authentification */
-const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password'];
+const PUBLIC_ROUTES = ['/login', '/signup', '/forgot-password', '/auth/activate'];
 
 /**
  * Middleware : rafraîchit la session auth et protège les routes
@@ -59,7 +59,9 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Session active et sur /login → redirect vers /
-  if (user && isPublicRoute) {
+  // Exception : /auth/activate doit rester accessible même avec une session
+  // (l'utilisateur vient de cliquer le lien d'invitation et a un token)
+  if (user && isPublicRoute && !pathname.startsWith('/auth/')) {
     const homeUrl = new URL('/', request.url);
     return NextResponse.redirect(homeUrl);
   }
