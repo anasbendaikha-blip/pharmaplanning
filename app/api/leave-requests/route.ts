@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
         recipientName: manager.name,
         title: 'Nouvelle demande de conge',
         message: `${empInfo.name} demande un conge du ${start_date} au ${end_date}`,
-        actionUrl: '/calendrier-conges',
+        actionUrl: '/conges',
         data: {
           employeeName: empInfo.name,
           startDate: start_date,
@@ -168,7 +168,7 @@ export async function PUT(request: NextRequest) {
           message: body.status === 'approved'
             ? `Votre conge du ${leaveData.start_date} au ${leaveData.end_date} a ete approuve`
             : `Votre conge du ${leaveData.start_date} au ${leaveData.end_date} a ete refuse`,
-          actionUrl: '/calendrier-conges',
+          actionUrl: '/conges',
           data: {
             startDate: leaveData.start_date as string,
             endDate: leaveData.end_date as string,

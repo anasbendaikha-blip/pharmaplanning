@@ -166,7 +166,7 @@ async function testNotifications() {
       recipientName: testName,
       title: '[TEST] Conge approuve',
       message: 'Conge du 01/03 au 07/03 approuve',
-      actionUrl: '/calendrier-conges',
+      actionUrl: '/conges',
       data: {
         employeeName: testName,
         startDate: '2026-03-01',
@@ -220,7 +220,7 @@ async function testNotifications() {
       recipientName: testName,
       title: '[TEST] Resume hebdomadaire',
       message: 'Resume de la semaine 7',
-      actionUrl: '/titulaire/recap-hebdo',
+      actionUrl: '/recap',
       data: {
         weekNumber: 7,
         year: 2026,

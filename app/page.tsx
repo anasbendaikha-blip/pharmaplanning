@@ -332,7 +332,7 @@ export default function DashboardPage() {
             <QuickLink href="/recap" label="Récapitulatif" description="Heures hebdomadaires par employé" />
             <QuickLink href="/gardes" label="Gardes" description="Planning des gardes et astreintes" />
             <QuickLink href="/employes" label="Employés" description={`Gérer les ${stats.activeEmployees} employés`} />
-            <QuickLink href="/calendrier-conges" label="Congés" description="Calendrier annuel des congés" />
+            <QuickLink href="/conges" label="Congés" description="Calendrier annuel des congés" />
             <QuickLink href="/portail-employe" label="Portail Employé" description="Vue employé du planning" />
             <QuickLink href="/titulaire/analytics" label="Analytics" description="KPIs, graphiques et predictions" />
             <QuickLink href="/titulaire/conformite" label="Conformité" description="Rapport de conformité légale" />

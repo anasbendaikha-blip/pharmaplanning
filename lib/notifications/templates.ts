@@ -275,7 +275,7 @@ export function getLeaveApprovedTemplate(data: {
       </div>
     </div>
 
-    <a href="${getAppUrl()}/calendrier-conges" class="button">Voir mes conges</a>
+    <a href="${getAppUrl()}/conges" class="button">Voir mes conges</a>
   `);
 
   const textBody = `Bonjour ${data.employeeName},
@@ -287,7 +287,7 @@ Debut : ${data.startDate}
 Fin : ${data.endDate}
 Duree : ${data.days} jour(s) ouvres
 
-Voir mes conges : ${getAppUrl()}/calendrier-conges`;
+Voir mes conges : ${getAppUrl()}/conges`;
 
   return { subject, htmlBody, textBody };
 }
@@ -322,7 +322,7 @@ export function getLeaveRejectedTemplate(data: {
     </div>
 
     <p>Veuillez contacter votre responsable pour plus d'informations.</p>
-    <a href="${getAppUrl()}/calendrier-conges" class="button">Voir mes conges</a>
+    <a href="${getAppUrl()}/conges" class="button">Voir mes conges</a>
   `);
 
   const textBody = `Bonjour ${data.employeeName},
@@ -334,7 +334,7 @@ Debut : ${data.startDate}
 Fin : ${data.endDate}
 
 Contactez votre responsable pour plus d'informations.
-Voir mes conges : ${getAppUrl()}/calendrier-conges`;
+Voir mes conges : ${getAppUrl()}/conges`;
 
   return { subject, htmlBody, textBody };
 }
@@ -378,7 +378,7 @@ export function getLeaveRequestedTemplate(data: {
       </div>
     </div>
 
-    <a href="${getAppUrl()}/calendrier-conges" class="button">Gerer les conges</a>
+    <a href="${getAppUrl()}/conges" class="button">Gerer les conges</a>
   `);
 
   const textBody = `Bonjour ${data.managerName},
@@ -390,7 +390,7 @@ Debut : ${data.startDate}
 Fin : ${data.endDate}
 Duree : ${data.days} jour(s) ouvres
 
-Gerer les conges : ${getAppUrl()}/calendrier-conges`;
+Gerer les conges : ${getAppUrl()}/conges`;
 
   return { subject, htmlBody, textBody };
 }
@@ -463,7 +463,7 @@ export function getWeeklySummaryTemplate(data: {
       </div>
     </div>
 
-    <a href="${getAppUrl()}/titulaire/recap-hebdo" class="button">Voir le rapport complet</a>
+    <a href="${getAppUrl()}/recap" class="button">Voir le rapport complet</a>
   `);
 
   const textBody = `Bonjour ${data.managerName},
@@ -474,7 +474,7 @@ Total heures : ${data.totalHours}h
 Total shifts : ${data.totalShifts}
 Employes actifs : ${data.employeesCount}
 
-Voir le rapport : ${getAppUrl()}/titulaire/recap-hebdo`;
+Voir le rapport : ${getAppUrl()}/recap`;
 
   return { subject, htmlBody, textBody };
 }
