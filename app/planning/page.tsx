@@ -28,6 +28,7 @@ import { analyzeWeeklyDispos, getAlertCounts, sortAlertsByPriority } from '@/lib
 import { calculateWeekStats } from '@/lib/week-analytics';
 import { mergeFixedSlots } from '@/lib/horaires-fixes-service';
 import { MOCK_HORAIRES_FIXES } from './data/mockHorairesFixes';
+import { loadPharmacieConfig } from '@/lib/pharmacie-config-service';
 
 import WeekNavigation from './components/WeekNavigation';
 import JourView from './components/JourView';
@@ -38,17 +39,36 @@ import ShiftModal from './components/ShiftModal';
 import QuickAssignPanel from './components/QuickAssignPanel';
 
 /**
- * Horaires d'ouverture de la Pharmacie Isabelle MAURER
+ * Horaires d'ouverture — chargés depuis les paramètres pharmacie (localStorage)
+ * Fallback sur les valeurs par défaut si jamais non configuré
  */
-const OPENING_HOURS: WeeklyOpeningHours = {
-  0: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-  1: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-  2: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-  3: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-  4: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-  5: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-  6: { is_open: false, slots: [] },
-};
+function getOpeningHoursFromConfig(): WeeklyOpeningHours {
+  if (typeof window === 'undefined') {
+    return {
+      0: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
+      1: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
+      2: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
+      3: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
+      4: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
+      5: { is_open: true, slots: [{ start: '08:30', end: '13:00' }] },
+      6: { is_open: false, slots: [] },
+    };
+  }
+  const cfg = loadPharmacieConfig();
+  return cfg.horaires.ouverture;
+}
+
+function getPlanningRulesFromConfig() {
+  if (typeof window === 'undefined') {
+    return { maxDailyHours: 10, minRestHours: 35, minPharmacists: 1 };
+  }
+  const cfg = loadPharmacieConfig();
+  return {
+    maxDailyHours: cfg.planning.maxDailyHours,
+    minRestHours: cfg.planning.minRestHoursWeekly,
+    minPharmacists: cfg.planning.minPharmacists,
+  };
+}
 
 /** Mode de vue : jour, semaine ou papier */
 type ViewMode = 'jour' | 'semaine' | 'paper';
@@ -313,9 +333,11 @@ export default function PlanningPage() {
     if (!organizationId || employees.length === 0) {
       return { conflicts: [] as Conflict[], pharmacistCoveragePercent: 100 };
     }
+    const openingHours = getOpeningHoursFromConfig();
+    const rules = getPlanningRulesFromConfig();
     return validateWeeklyPlanning(
-      shifts, employees, weekDates, OPENING_HOURS, organizationId,
-      { maxDailyHours: 10, minRestHours: 35, minPharmacists: 1 }
+      shifts, employees, weekDates, openingHours, organizationId,
+      rules
     );
   }, [shifts, weekDates, employees, organizationId]);
 

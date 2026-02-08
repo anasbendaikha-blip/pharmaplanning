@@ -219,3 +219,63 @@ export function getInitials(firstName: string, lastName: string): string {
 export function getSlotColor(category: EmployeeCategory): string {
   return (category === 'etudiant' || category === 'apprenti') ? COLORS.student : COLORS.slot;
 }
+
+// ═══════════════════════════════════════════════════════
+// Dynamic config loader (from Paramètres Pharmacie)
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Charge les zones dynamiques depuis les paramètres pharmacie (localStorage)
+ * Utilise les valeurs par défaut si non configuré ou côté serveur
+ */
+export function getDynamicPlanningZones(): PlanningZone[] {
+  if (typeof window === 'undefined') return PLANNING_ZONES;
+
+  try {
+    const raw = localStorage.getItem('pharmaplanning-config');
+    if (!raw) return PLANNING_ZONES;
+
+    const cfg = JSON.parse(raw);
+    const h = cfg?.horaires;
+    if (!h) return PLANNING_ZONES;
+
+    return [
+      {
+        ...ZONE_OUVERTURE,
+        start: h.preOuvertureDebut || ZONE_OUVERTURE.start,
+        end: h.preOuvertureFin || ZONE_OUVERTURE.end,
+      },
+      {
+        ...ZONE_GARDE,
+        start: h.gardeDebut || ZONE_GARDE.start,
+        end: h.gardeFin || ZONE_GARDE.end,
+      },
+    ];
+  } catch {
+    return PLANNING_ZONES;
+  }
+}
+
+/**
+ * Obtient les paramètres timeline depuis la configuration pharmacie
+ */
+export function getDynamicTimeline(): { start: number; end: number; span: number } {
+  if (typeof window === 'undefined') {
+    return { start: TIMELINE_START, end: TIMELINE_END, span: TIMELINE_SPAN };
+  }
+
+  try {
+    const raw = localStorage.getItem('pharmaplanning-config');
+    if (!raw) return { start: TIMELINE_START, end: TIMELINE_END, span: TIMELINE_SPAN };
+
+    const cfg = JSON.parse(raw);
+    const h = cfg?.horaires;
+    if (!h) return { start: TIMELINE_START, end: TIMELINE_END, span: TIMELINE_SPAN };
+
+    const start = h.timelineStart ?? TIMELINE_START;
+    const end = h.timelineEnd ?? TIMELINE_END;
+    return { start, end, span: end - start };
+  } catch {
+    return { start: TIMELINE_START, end: TIMELINE_END, span: TIMELINE_SPAN };
+  }
+}

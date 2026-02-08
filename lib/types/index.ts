@@ -69,6 +69,15 @@ export type {
   HorairesFixesResult,
 } from './horaires-fixes';
 
+// Paramètres Pharmacie (Planning V2 Phase 6)
+export type {
+  PharmacieConfig,
+  PharmacieInfo,
+  HorairesConfig,
+  PlanningRulesConfig,
+  NotificationsConfig,
+} from './pharmacie-config';
+
 // Gardes
 export type {
   GardeDuty,
