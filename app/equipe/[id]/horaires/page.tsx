@@ -14,10 +14,10 @@ import { MOCK_HORAIRES_FIXES } from '@/app/planning/data/mockHorairesFixes';
 const CATEGORY_CONFIG: Record<EmployeeCategory, { label: string; color: string }> = {
   pharmacien_titulaire: { label: 'Pharmacien Titulaire', color: '#2563eb' },
   pharmacien_adjoint: { label: 'Pharmacien Adjoint', color: '#3b82f6' },
-  preparateur: { label: 'Pr\u00e9parateur', color: '#10b981' },
+  preparateur: { label: 'Preparateur', color: '#10b981' },
   rayonniste: { label: 'Rayonniste', color: '#f59e0b' },
   apprenti: { label: 'Apprenti', color: '#8b5cf6' },
-  etudiant: { label: '\u00C9tudiant', color: '#ec4899' },
+  etudiant: { label: 'Etudiant', color: '#ec4899' },
 };
 
 const JOURS = [
@@ -30,9 +30,9 @@ const JOURS = [
 ];
 
 const PRESETS = [
-  { label: 'Matin\u00e9e', start: '08:30', end: '14:00', breakMin: 0, type: 'morning' as const },
-  { label: 'Apr\u00e8s-midi', start: '13:00', end: '19:30', breakMin: 0, type: 'afternoon' as const },
-  { label: 'Journ\u00e9e', start: '08:30', end: '18:30', breakMin: 60, type: 'regular' as const },
+  { label: 'Matinee', start: '08:30', end: '14:00', breakMin: 0, type: 'morning' as const },
+  { label: 'Apres-midi', start: '13:00', end: '19:30', breakMin: 0, type: 'afternoon' as const },
+  { label: 'Journee', start: '08:30', end: '18:30', breakMin: 60, type: 'regular' as const },
   { label: 'Sam matin', start: '08:30', end: '13:00', breakMin: 0, type: 'morning' as const },
 ];
 
@@ -168,7 +168,7 @@ export default function HorairesPage() {
       return result;
     });
     setHasChanges(true);
-    addToast('success', 'Horaires copi\u00e9s vers Lun-Ven');
+    addToast('success', 'Horaires copies vers Lun-Ven');
   }, [horaires, addToast]);
 
   const handleSave = useCallback(async () => {
@@ -177,7 +177,7 @@ export default function HorairesPage() {
     await new Promise(r => setTimeout(r, 500));
     setHasChanges(false);
     setIsSaving(false);
-    addToast('success', 'Horaires fixes sauvegard\u00e9s');
+    addToast('success', 'Horaires fixes sauvegardes');
   }, [addToast]);
 
   const handleReset = useCallback(() => {
@@ -185,7 +185,7 @@ export default function HorairesPage() {
       const fixed = getFixedForEmployee(MOCK_HORAIRES_FIXES, employee.id);
       setHoraires(fixed);
       setHasChanges(false);
-      addToast('warning', 'Horaires r\u00e9initialis\u00e9s');
+      addToast('warning', 'Horaires reinitialises');
     }
   }, [employee, addToast]);
 
@@ -206,8 +206,8 @@ export default function HorairesPage() {
   if (!employee) {
     return (
       <div className="hf-not-found">
-        <h2>Employ\u00e9 non trouv\u00e9</h2>
-        <Link href="/equipe">Retour \u00e0 l&apos;\u00e9quipe</Link>
+        <h2>Employe non trouve</h2>
+        <Link href="/equipe">Retour a l&apos;equipe</Link>
         <style jsx>{`
           .hf-not-found { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 60px; color: var(--color-neutral-600); }
         `}</style>
@@ -222,19 +222,19 @@ export default function HorairesPage() {
       <div className="hf-page">
         {/* Header */}
         <div className="hf-header">
-          <Link href="/equipe" className="hf-back">\u2190 Retour \u00e9quipe</Link>
+          <Link href="/equipe" className="hf-back">Retour equipe</Link>
           <div className="hf-emp-info">
             <div className="hf-avatar" style={{ backgroundColor: catCfg.color }}>
               {getInitials(employee.first_name, employee.last_name)}
             </div>
             <div>
               <h1 className="hf-emp-name">{employee.first_name} {employee.last_name}</h1>
-              <div className="hf-emp-role">{catCfg.label} \u2022 {employee.contract_hours}h/sem</div>
+              <div className="hf-emp-role">{catCfg.label} - {employee.contract_hours}h/sem</div>
             </div>
           </div>
           <div className="hf-header-actions">
             <button className="hf-btn hf-btn--outline" onClick={handleReset} type="button">
-              \uD83D\uDD04 R\u00e9initialiser
+              Reinitialiser
             </button>
             <button
               className="hf-btn hf-btn--primary"
@@ -242,17 +242,17 @@ export default function HorairesPage() {
               disabled={!hasChanges || isSaving}
               type="button"
             >
-              {isSaving ? 'Sauvegarde...' : '\uD83D\uDCBE Sauvegarder'}
+              {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
             </button>
           </div>
         </div>
 
         {/* Instructions */}
         <div className="hf-instructions">
-          <span className="hf-instructions-icon">\uD83D\uDCA1</span>
+          <svg className="hf-instructions-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
           <div>
-            <strong>D\u00e9finissez la semaine type de {employee.first_name}</strong>
-            <span>Ces horaires seront automatiquement pr\u00e9-remplis chaque semaine dans le planning.</span>
+            <strong>Definissez la semaine type de {employee.first_name}</strong>
+            <span>Ces horaires seront automatiquement pre-remplis chaque semaine dans le planning.</span>
           </div>
         </div>
 
@@ -266,13 +266,13 @@ export default function HorairesPage() {
               onClick={() => selectedDay !== null && handlePresetApply(selectedDay, preset)}
               disabled={selectedDay === null}
               type="button"
-              title={`${preset.start}\u2013${preset.end}`}
+              title={`${preset.start}-${preset.end}`}
             >
               {preset.label}
             </button>
           ))}
           {selectedDay === null && (
-            <span className="hf-presets-hint">S\u00e9lectionnez un jour d&apos;abord</span>
+            <span className="hf-presets-hint">Selectionnez un jour d&apos;abord</span>
           )}
         </div>
 
@@ -308,7 +308,7 @@ export default function HorairesPage() {
                       type="button"
                       title="Supprimer"
                     >
-                      \u2715
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
                   )}
                 </div>
@@ -317,7 +317,7 @@ export default function HorairesPage() {
                   <div className="hf-day-content">
                     <div className="hf-time-row">
                       <div className="hf-time-group">
-                        <label className="hf-time-label">D\u00e9but</label>
+                        <label className="hf-time-label">Debut</label>
                         <input
                           type="time"
                           className="hf-time-input"
@@ -326,7 +326,7 @@ export default function HorairesPage() {
                           onClick={e => e.stopPropagation()}
                         />
                       </div>
-                      <span className="hf-time-sep">\u2192</span>
+                      <span className="hf-time-sep">-&gt;</span>
                       <div className="hf-time-group">
                         <label className="hf-time-label">Fin</label>
                         <input
@@ -364,14 +364,14 @@ export default function HorairesPage() {
                           onClick={e => { e.stopPropagation(); handleCopyToWeekdays(jour.num); }}
                           type="button"
                         >
-                          \uD83D\uDCCB Copier Lun\u2013Ven
+                          Copier Lun-Ven
                         </button>
                       )}
                     </div>
                   </div>
                 ) : (
                   <div className="hf-day-empty">
-                    <span className="hf-add-icon">\u2795</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-300)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                     <span className="hf-add-text">Cliquer pour ajouter</span>
                   </div>
                 )}
@@ -383,11 +383,11 @@ export default function HorairesPage() {
         {/* Stats */}
         <div className="hf-stats">
           <div className="hf-stat">
-            <span className="hf-stat-label">Jours travaill\u00e9s :</span>
+            <span className="hf-stat-label">Jours travailles :</span>
             <span className="hf-stat-value">{weeklyStats.days} / 6</span>
           </div>
           <div className="hf-stat">
-            <span className="hf-stat-label">Heures hebdo estim\u00e9es :</span>
+            <span className="hf-stat-label">Heures hebdo estimees :</span>
             <span className="hf-stat-value">{weeklyStats.hours}h</span>
           </div>
           <div className="hf-stat">
@@ -395,7 +395,7 @@ export default function HorairesPage() {
             <span className="hf-stat-value">{employee.contract_hours}h</span>
           </div>
           <div className="hf-stat">
-            <span className="hf-stat-label">Diff\u00e9rence :</span>
+            <span className="hf-stat-label">Difference :</span>
             <span className={`hf-stat-value ${weeklyStats.hours > employee.contract_hours ? 'hf-stat-value--over' : weeklyStats.hours < employee.contract_hours ? 'hf-stat-value--under' : ''}`}>
               {weeklyStats.hours > employee.contract_hours ? '+' : ''}{Math.round((weeklyStats.hours - employee.contract_hours) * 10) / 10}h
             </span>
@@ -405,7 +405,7 @@ export default function HorairesPage() {
         {/* Unsaved changes warning */}
         {hasChanges && (
           <div className="hf-warning">
-            \u26A0\uFE0F Modifications non sauvegard\u00e9es
+            [!] Modifications non sauvegardees
           </div>
         )}
       </div>
@@ -534,8 +534,8 @@ export default function HorairesPage() {
         }
 
         .hf-instructions-icon {
-          font-size: 20px;
           flex-shrink: 0;
+          margin-top: 1px;
         }
 
         .hf-instructions strong {
