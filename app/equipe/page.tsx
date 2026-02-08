@@ -14,14 +14,14 @@ import {
   downloadFile,
 } from '@/lib/planning-import-export';
 
-/** Catgorie labels */
+/** Category labels */
 const CATEGORY_CONFIG: Record<EmployeeCategory, { label: string; icon: string; color: string }> = {
-  pharmacien_titulaire: { label: 'Pharmacien Titulaire', icon: '\uD83D\uDC8A', color: '#2563eb' },
-  pharmacien_adjoint: { label: 'Pharmacien Adjoint', icon: '\uD83D\uDC8A', color: '#3b82f6' },
-  preparateur: { label: 'Pr\u00e9parateur', icon: '\u2697\uFE0F', color: '#10b981' },
-  rayonniste: { label: 'Rayonniste', icon: '\uD83D\uDCE6', color: '#f59e0b' },
-  apprenti: { label: 'Apprenti', icon: '\uD83C\uDF93', color: '#8b5cf6' },
-  etudiant: { label: '\u00C9tudiant', icon: '\uD83D\uDCDA', color: '#ec4899' },
+  pharmacien_titulaire: { label: 'Pharmacien Titulaire', icon: 'Ph', color: '#2563eb' },
+  pharmacien_adjoint: { label: 'Pharmacien Adjoint', icon: 'Ph', color: '#3b82f6' },
+  preparateur: { label: 'Preparateur', icon: 'Pr', color: '#10b981' },
+  rayonniste: { label: 'Rayonniste', icon: 'Ra', color: '#f59e0b' },
+  apprenti: { label: 'Apprenti', icon: 'Ap', color: '#8b5cf6' },
+  etudiant: { label: 'Etudiant', icon: 'Et', color: '#ec4899' },
 };
 
 const CONTRACT_LABELS: Record<string, string> = {
@@ -29,7 +29,7 @@ const CONTRACT_LABELS: Record<string, string> = {
   CDD: 'CDD',
   alternance: 'Alternance',
   stage: 'Stage',
-  interim: 'Int\u00e9rim',
+  interim: 'Interim',
 };
 
 const DAY_NAMES_SHORT = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -114,13 +114,13 @@ export default function EquipePage() {
   const handleExportCSV = useCallback(() => {
     const csv = exportPlanningToCSV(MOCK_HORAIRES_FIXES, employees);
     downloadFile(csv, 'equipe-horaires-fixes.csv', 'text/csv');
-    addToast('success', 'Export CSV t\u00e9l\u00e9charg\u00e9');
+    addToast('success', 'Export CSV telecharge');
   }, [employees, addToast]);
 
   const handleExportJSON = useCallback(() => {
     const json = exportHorairesToJSON(MOCK_HORAIRES_FIXES, employees);
     downloadFile(json, 'equipe-horaires-fixes.json', 'application/json');
-    addToast('success', 'Export JSON t\u00e9l\u00e9charg\u00e9');
+    addToast('success', 'Export JSON telecharge');
   }, [employees, addToast]);
 
   // Initials helper
@@ -130,7 +130,7 @@ export default function EquipePage() {
     return (
       <div className="eq-loading">
         <span className="eq-spinner" />
-        <span>Chargement de l&apos;\u00e9quipe...</span>
+        <span>Chargement de l&apos;equipe...</span>
         <style jsx>{`
           .eq-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 400px; color: var(--color-neutral-500); }
           .eq-spinner { width: 32px; height: 32px; border: 3px solid var(--color-neutral-200); border-top-color: var(--color-primary-500); border-radius: 50%; animation: eqspin 0.8s linear infinite; }
@@ -146,13 +146,15 @@ export default function EquipePage() {
         {/* Header */}
         <div className="eq-header">
           <div className="eq-header-top">
-            <h1 className="eq-title">\u00C9quipe & Horaires Fixes</h1>
+            <h1 className="eq-title">Equipe &amp; Horaires Fixes</h1>
             <div className="eq-actions">
               <button className="eq-btn eq-btn--outline" onClick={handleExportCSV} type="button">
-                \uD83D\uDCE5 Export CSV
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export CSV
               </button>
               <button className="eq-btn eq-btn--outline" onClick={handleExportJSON} type="button">
-                \uD83D\uDCE5 Export JSON
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export JSON
               </button>
             </div>
           </div>
@@ -160,16 +162,18 @@ export default function EquipePage() {
           {/* Filters */}
           <div className="eq-filters">
             <div className="eq-search-wrap">
-              <span className="eq-search-icon">\uD83D\uDD0D</span>
+              <svg className="eq-search-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input
                 type="text"
                 className="eq-search"
-                placeholder="Rechercher un employ\u00e9..."
+                placeholder="Rechercher un employe..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
               />
               {searchTerm && (
-                <button className="eq-search-clear" onClick={() => setSearchTerm('')} type="button">\u2715</button>
+                <button className="eq-search-clear" onClick={() => setSearchTerm('')} type="button">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
               )}
             </div>
             <select
@@ -177,12 +181,12 @@ export default function EquipePage() {
               value={filterCategory}
               onChange={e => setFilterCategory(e.target.value as EmployeeCategory | 'all')}
             >
-              <option value="all">Tous les r\u00f4les</option>
+              <option value="all">Tous les roles</option>
               {Object.entries(CATEGORY_CONFIG).map(([key, cfg]) => (
-                <option key={key} value={key}>{cfg.icon} {cfg.label}</option>
+                <option key={key} value={key}>{cfg.label}</option>
               ))}
             </select>
-            <div className="eq-count">{filteredEmployees.length} employ\u00e9{filteredEmployees.length > 1 ? 's' : ''}</div>
+            <div className="eq-count">{filteredEmployees.length} employe{filteredEmployees.length > 1 ? 's' : ''}</div>
           </div>
         </div>
 
@@ -192,10 +196,10 @@ export default function EquipePage() {
             <thead>
               <tr>
                 <th className="eq-th eq-th--sortable" onClick={() => handleSort('nom')}>
-                  Employ\u00e9 {sortField === 'nom' && (sortOrder === 'asc' ? '\u2191' : '\u2193')}
+                  Employe {sortField === 'nom' && (sortOrder === 'asc' ? '\u2191' : '\u2193')}
                 </th>
                 <th className="eq-th eq-th--sortable" onClick={() => handleSort('role')}>
-                  R\u00f4le {sortField === 'role' && (sortOrder === 'asc' ? '\u2191' : '\u2193')}
+                  Role {sortField === 'role' && (sortOrder === 'asc' ? '\u2191' : '\u2193')}
                 </th>
                 <th className="eq-th">Horaires fixes</th>
                 <th className="eq-th eq-th--sortable" onClick={() => handleSort('heures')}>
@@ -238,7 +242,7 @@ export default function EquipePage() {
                     {/* Role */}
                     <td className="eq-td">
                       <span className="eq-role-badge" style={{ borderColor: catCfg.color, color: catCfg.color }}>
-                        {catCfg.icon} {catCfg.label}
+                        {catCfg.label}
                       </span>
                     </td>
 
@@ -259,7 +263,7 @@ export default function EquipePage() {
                           <span className="eq-hf-hours">{Math.round(totalWeeklyHours)}h/sem</span>
                         </div>
                       ) : (
-                        <span className="eq-hf-empty">Aucun horaire fix\u00e9</span>
+                        <span className="eq-hf-empty">Aucun horaire fixe</span>
                       )}
                     </td>
 
@@ -279,9 +283,10 @@ export default function EquipePage() {
                         <Link
                           href={`/equipe/${emp.id}/horaires`}
                           className="eq-action-btn"
-                          title="G\u00e9rer horaires fixes"
+                          title="Gerer horaires fixes"
                         >
-                          \uD83D\uDD70\uFE0F Horaires
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                          Horaires
                         </Link>
                       </div>
                     </td>
@@ -293,8 +298,8 @@ export default function EquipePage() {
 
           {filteredEmployees.length === 0 && (
             <div className="eq-empty">
-              <div className="eq-empty-icon">\uD83D\uDD0D</div>
-              <div className="eq-empty-text">Aucun employ\u00e9 trouv\u00e9</div>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-300)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <div className="eq-empty-text">Aucun employe trouve</div>
             </div>
           )}
         </div>
@@ -344,6 +349,9 @@ export default function EquipePage() {
           transition: all 0.15s;
           border: none;
           white-space: nowrap;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
         }
 
         .eq-btn--outline {
@@ -370,18 +378,18 @@ export default function EquipePage() {
           max-width: 300px;
         }
 
-        .eq-search-icon {
+        .eq-search-wrap .eq-search-icon-svg {
           position: absolute;
           left: 10px;
           top: 50%;
           transform: translateY(-50%);
-          font-size: 13px;
           pointer-events: none;
+          color: var(--color-neutral-400);
         }
 
         .eq-search {
           width: 100%;
-          padding: 7px 30px 7px 30px;
+          padding: 7px 30px 7px 32px;
           border: 1px solid var(--color-neutral-300);
           border-radius: var(--radius-md);
           font-family: var(--font-family-primary);
@@ -400,12 +408,18 @@ export default function EquipePage() {
           right: 6px;
           top: 50%;
           transform: translateY(-50%);
-          padding: 2px 6px;
+          padding: 4px;
           border: none;
           background: transparent;
           cursor: pointer;
-          font-size: 13px;
           color: var(--color-neutral-400);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .eq-search-clear:hover {
+          color: var(--color-neutral-600);
         }
 
         .eq-filter-select {
@@ -620,11 +634,10 @@ export default function EquipePage() {
         .eq-empty {
           padding: 48px 20px;
           text-align: center;
-        }
-
-        .eq-empty-icon {
-          font-size: 40px;
-          margin-bottom: 12px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
         }
 
         .eq-empty-text {
