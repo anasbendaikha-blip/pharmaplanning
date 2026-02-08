@@ -2,9 +2,12 @@
  * GanttDayView — Vue Gantt detaillee par jour
  *
  * Timeline horizontale 7h-21h avec barres de creneaux par employe.
- * Zone fermeture 12h30-13h30 (Lun-Ven) affichee en gris.
- * Samedi : pas de fermeture, pauses affichees sur barres longues.
+ * Bandes bleues avant ouverture / apres fermeture (pharmacie fermee).
+ * Zone jaune fermeture 12h30-13h30 (Lun-Ven) avec label "FERME".
+ * Samedi : pas de fermeture midi, pauses affichees sur barres longues.
  * Disponibilites etudiants : fond vert (dispo) / rouge (non dispo).
+ * PAS de titres de categories — seulement pastille couleur par employe.
+ * Legende en footer.
  *
  * Conventions : styled-jsx, prefix "gd-", pas d'emojis, ASCII uniquement.
  */
@@ -21,6 +24,12 @@ const END_HOUR = 21;
 const TOTAL_HOURS = END_HOUR - START_HOUR; // 14h
 const HOUR_PX = 60; // pixels par heure
 
+/** Horaires d'ouverture pharmacie */
+const OPEN_WEEKDAY = '08:30';
+const CLOSE_WEEKDAY = '20:30';
+const OPEN_SATURDAY = '08:30';
+const CLOSE_SATURDAY = '19:30';
+
 /** Fermeture midi Lun-Ven */
 const CLOSURE_START = '12:30';
 const CLOSURE_END = '13:30';
@@ -35,15 +44,6 @@ const ROLE_COLORS: Record<EmployeeCategory, string> = {
   etudiant: '#2563eb',
 };
 
-const ROLE_LABELS: Record<EmployeeCategory, string> = {
-  pharmacien_titulaire: 'Ph. Titulaire',
-  pharmacien_adjoint: 'Ph. Adjoint',
-  preparateur: 'Preparateur',
-  rayonniste: 'Rayonniste',
-  apprenti: 'Apprenti',
-  etudiant: 'Etudiant',
-};
-
 const CATEGORY_ORDER: EmployeeCategory[] = [
   'pharmacien_titulaire',
   'pharmacien_adjoint',
@@ -51,6 +51,14 @@ const CATEGORY_ORDER: EmployeeCategory[] = [
   'rayonniste',
   'apprenti',
   'etudiant',
+];
+
+const LEGEND_ITEMS: { label: string; color: string }[] = [
+  { label: 'Pharmacien Titulaire', color: '#dc2626' },
+  { label: 'Pharmacien Adjoint', color: '#ea580c' },
+  { label: 'Preparateur', color: '#16a34a' },
+  { label: 'Apprenti', color: '#7c3aed' },
+  { label: 'Etudiant', color: '#2563eb' },
 ];
 
 const ROW_HEIGHT = 56;
@@ -154,6 +162,14 @@ export default function GanttDayView({
   const isSunday = dayOfWeek === 0;
   const showClosure = !isSaturday && !isSunday; // Fermeture seulement Lun-Ven
 
+  // Horaires ouverture/fermeture selon le jour
+  const openTime = isSaturday ? OPEN_SATURDAY : OPEN_WEEKDAY;
+  const closeTime = isSaturday ? CLOSE_SATURDAY : CLOSE_WEEKDAY;
+
+  // Zones fermees (bandes bleues)
+  const closedBeforePercent = timeToPercent(openTime);
+  const closedAfterPercent = timeToPercent(closeTime);
+
   const sortedEmployees = useMemo(() => sortEmployees(employees), [employees]);
 
   const shiftsByEmployee = useMemo(() => {
@@ -198,7 +214,7 @@ export default function GanttDayView({
     return marks;
   }, []);
 
-  // Closure zone positions
+  // Closure zone positions (yellow zone)
   const closureZone = useMemo(() => {
     if (!showClosure) return null;
     return {
@@ -251,7 +267,21 @@ export default function GanttDayView({
           <div className="gd-header">
             <div className="gd-header-name">EMPLOYE</div>
             <div className="gd-header-timeline" style={{ minWidth: `${timelineWidth}px` }}>
-              {/* Closure zone in header */}
+              {/* Closed zones (blue bands) */}
+              {!isSunday && (
+                <>
+                  <div
+                    className="gd-closed-zone"
+                    style={{ left: '0%', width: `${closedBeforePercent}%` }}
+                  />
+                  <div
+                    className="gd-closed-zone"
+                    style={{ left: `${closedAfterPercent}%`, width: `${100 - closedAfterPercent}%` }}
+                  />
+                </>
+              )}
+
+              {/* Closure zone in header (yellow) */}
               {closureZone && (
                 <div
                   className="gd-closure gd-closure--header"
@@ -288,8 +318,6 @@ export default function GanttDayView({
             ) : (
               sortedEmployees.map((emp, index) => {
                 const empShifts = shiftsByEmployee.get(emp.id) || [];
-                const prevCategory = index > 0 ? sortedEmployees[index - 1].category : null;
-                const showCategorySep = emp.category !== prevCategory;
                 const empDayHours = empShifts.reduce((sum, s) => sum + shiftEffectiveHours(s), 0);
 
                 // Student availability
@@ -304,24 +332,17 @@ export default function GanttDayView({
 
                 return (
                   <div key={emp.id}>
-                    {/* Category separator */}
-                    {showCategorySep && (
-                      <div className="gd-cat-sep">
-                        <span className="gd-cat-dot" style={{ backgroundColor: ROLE_COLORS[emp.category] }} />
-                        <span className="gd-cat-label">{ROLE_LABELS[emp.category]}</span>
-                      </div>
-                    )}
-
-                    {/* Employee row */}
+                    {/* Employee row — NO category separator headers */}
                     <div
                       className={`gd-row ${rowBgClass} ${index % 2 === 0 ? 'gd-row--even' : ''}`}
                       onClick={(e) => handleRowClick(e, emp.id)}
                     >
-                      {/* Name sidebar */}
+                      {/* Name sidebar with color badge (no category title) */}
                       <div className="gd-row-name">
-                        <span className="gd-avatar" style={{ backgroundColor: ROLE_COLORS[emp.category] }}>
-                          {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
-                        </span>
+                        <div
+                          className="gd-role-badge"
+                          style={{ backgroundColor: ROLE_COLORS[emp.category] }}
+                        />
                         <div className="gd-name-info">
                           <span className="gd-name-text">
                             {emp.first_name} {emp.last_name.charAt(0)}.
@@ -339,7 +360,21 @@ export default function GanttDayView({
 
                       {/* Timeline area */}
                       <div className="gd-row-timeline" style={{ minWidth: `${timelineWidth}px` }}>
-                        {/* Closure zone */}
+                        {/* Closed zones (blue bands) */}
+                        {!isSunday && (
+                          <>
+                            <div
+                              className="gd-closed-zone gd-closed-zone--row"
+                              style={{ left: '0%', width: `${closedBeforePercent}%` }}
+                            />
+                            <div
+                              className="gd-closed-zone gd-closed-zone--row"
+                              style={{ left: `${closedAfterPercent}%`, width: `${100 - closedAfterPercent}%` }}
+                            />
+                          </>
+                        )}
+
+                        {/* Closure zone (yellow) */}
                         {closureZone && (
                           <div
                             className="gd-closure gd-closure--row"
@@ -376,7 +411,6 @@ export default function GanttDayView({
                           const right = timeToPercent(shift.end_time);
                           const width = right - left;
                           const isHovered = hoveredShiftId === shift.id;
-                          const hours = shiftEffectiveHours(shift);
                           const duration = shiftDurationHours(shift);
                           const showPauseBadge = shift.break_duration > 0 && (isSaturday || duration >= 6);
 
@@ -412,6 +446,16 @@ export default function GanttDayView({
             )}
           </div>
         </div>
+
+        {/* Legend footer */}
+        <div className="gd-legend">
+          {LEGEND_ITEMS.map(item => (
+            <div key={item.label} className="gd-legend-item">
+              <span className="gd-legend-dot" style={{ backgroundColor: item.color }} />
+              <span className="gd-legend-label">{item.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Tooltip */}
@@ -423,7 +467,6 @@ export default function GanttDayView({
           <div className="gd-tooltip-name">
             {tooltipData.emp.first_name} {tooltipData.emp.last_name}
           </div>
-          <div className="gd-tooltip-role">{ROLE_LABELS[tooltipData.emp.category]}</div>
           <div className="gd-tooltip-time">
             {tooltipData.shift.start_time} - {tooltipData.shift.end_time}
           </div>
@@ -445,7 +488,7 @@ export default function GanttDayView({
           height: 100%;
           background: white;
           border: 1px solid var(--color-neutral-200, #e5e7eb);
-          border-radius: 8px;
+          border-radius: 12px;
           overflow: hidden;
         }
 
@@ -501,6 +544,32 @@ export default function GanttDayView({
           height: 36px;
         }
 
+        /* Closed zones (blue diagonal bands) */
+        .gd-closed-zone {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          z-index: 1;
+          pointer-events: none;
+          background: repeating-linear-gradient(
+            45deg,
+            rgba(30, 58, 138, 0.08),
+            rgba(30, 58, 138, 0.08) 4px,
+            rgba(37, 99, 235, 0.04) 4px,
+            rgba(37, 99, 235, 0.04) 8px
+          );
+        }
+
+        .gd-closed-zone--row {
+          background: repeating-linear-gradient(
+            45deg,
+            rgba(30, 58, 138, 0.06),
+            rgba(30, 58, 138, 0.06) 4px,
+            rgba(37, 99, 235, 0.02) 4px,
+            rgba(37, 99, 235, 0.02) 8px
+          );
+        }
+
         /* Hour marks */
         .gd-hour-mark {
           position: absolute;
@@ -508,6 +577,7 @@ export default function GanttDayView({
           bottom: 0;
           width: 1px;
           background: var(--color-neutral-200, #e5e7eb);
+          z-index: 2;
         }
 
         .gd-hour-label {
@@ -521,33 +591,43 @@ export default function GanttDayView({
           user-select: none;
         }
 
-        /* Closure zone (12h30-13h30) */
+        /* Closure zone (12h30-13h30) — YELLOW */
         .gd-closure {
           position: absolute;
           top: 0;
           bottom: 0;
           pointer-events: none;
-          z-index: 1;
+          z-index: 3;
         }
 
         .gd-closure--header {
-          background: rgba(107, 114, 128, 0.12);
+          background: linear-gradient(
+            180deg,
+            rgba(250, 204, 21, 0.2) 0%,
+            rgba(250, 204, 21, 0.3) 100%
+          );
+          border-left: 2px dashed #ca8a04;
+          border-right: 2px dashed #ca8a04;
         }
 
         .gd-closure--row {
-          background: rgba(107, 114, 128, 0.08);
-          border-left: 2px dashed #9ca3af;
-          border-right: 2px dashed #9ca3af;
+          background: linear-gradient(
+            180deg,
+            rgba(250, 204, 21, 0.15) 0%,
+            rgba(250, 204, 21, 0.25) 100%
+          );
+          border-left: 2px dashed #ca8a04;
+          border-right: 2px dashed #ca8a04;
           display: flex;
           align-items: center;
           justify-content: center;
         }
 
         .gd-closure-label {
-          font-size: 9px;
-          font-weight: 700;
-          color: #6b7280;
-          letter-spacing: 1px;
+          font-size: 10px;
+          font-weight: 800;
+          color: #92400e;
+          letter-spacing: 2px;
           writing-mode: vertical-lr;
           text-orientation: mixed;
           transform: rotate(180deg);
@@ -561,7 +641,7 @@ export default function GanttDayView({
           bottom: 0;
           width: 2px;
           background: #dc2626;
-          z-index: 5;
+          z-index: 8;
         }
 
         .gd-now-dot {
@@ -580,7 +660,7 @@ export default function GanttDayView({
           bottom: 0;
           width: 2px;
           background: rgba(220, 38, 38, 0.3);
-          z-index: 3;
+          z-index: 6;
           pointer-events: none;
         }
 
@@ -597,32 +677,6 @@ export default function GanttDayView({
           color: var(--color-neutral-400, #9ca3af);
           font-size: 14px;
           width: 100%;
-        }
-
-        /* Category separator */
-        .gd-cat-sep {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 4px 12px;
-          background: var(--color-neutral-100, #f3f4f6);
-          border-bottom: 1px solid var(--color-neutral-200, #e5e7eb);
-          position: sticky;
-          left: 0;
-        }
-
-        .gd-cat-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-        }
-
-        .gd-cat-label {
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--color-neutral-500, #6b7280);
         }
 
         /* Employee row */
@@ -664,8 +718,8 @@ export default function GanttDayView({
           min-width: ${SIDEBAR_WIDTH}px;
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 4px 12px;
+          gap: 10px;
+          padding: 4px 16px;
           border-right: 1px solid var(--color-neutral-200, #e5e7eb);
           overflow: hidden;
           position: sticky;
@@ -674,16 +728,10 @@ export default function GanttDayView({
           background: inherit;
         }
 
-        .gd-avatar {
-          width: 28px;
-          height: 28px;
+        .gd-role-badge {
+          width: 14px;
+          height: 14px;
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 10px;
-          font-weight: 700;
-          color: white;
           flex-shrink: 0;
         }
 
@@ -695,7 +743,7 @@ export default function GanttDayView({
         }
 
         .gd-name-text {
-          font-size: 12px;
+          font-size: 14px;
           font-weight: 600;
           color: var(--color-neutral-800, #1f2937);
           white-space: nowrap;
@@ -773,36 +821,69 @@ export default function GanttDayView({
           justify-content: center;
           color: white;
           cursor: pointer;
-          z-index: 2;
+          z-index: 4;
           transition: transform 0.15s, box-shadow 0.15s;
           overflow: hidden;
           min-width: 4px;
-          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
         }
 
         .gd-bar:hover,
         .gd-bar--hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-          z-index: 4;
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+          z-index: 7;
         }
 
         .gd-bar-time {
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 600;
           white-space: nowrap;
           text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-          padding: 0 6px;
+          padding: 0 8px;
+          text-align: center;
+          flex: 1;
         }
 
         .gd-bar-pause {
-          position: absolute;
-          bottom: 2px;
-          right: 4px;
-          font-size: 9px;
+          background: rgba(255, 255, 255, 0.25);
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-size: 10px;
           font-weight: 500;
-          opacity: 0.9;
           white-space: nowrap;
+          flex-shrink: 0;
+          margin-right: 4px;
+        }
+
+        /* Legend footer */
+        .gd-legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
+          padding: 12px 16px;
+          border-top: 1px solid var(--color-neutral-200, #e5e7eb);
+          background: var(--color-neutral-50, #f9fafb);
+          flex-shrink: 0;
+        }
+
+        .gd-legend-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .gd-legend-dot {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .gd-legend-label {
+          font-size: 12px;
+          font-weight: 500;
+          color: #6b7280;
         }
 
         /* Tooltip */
@@ -824,15 +905,10 @@ export default function GanttDayView({
           font-size: 13px;
         }
 
-        .gd-tooltip-role {
-          font-size: 11px;
-          opacity: 0.7;
-          margin-bottom: 4px;
-        }
-
         .gd-tooltip-time {
           font-weight: 600;
           font-size: 13px;
+          margin-top: 2px;
         }
 
         .gd-tooltip-hours {
@@ -861,8 +937,10 @@ export default function GanttDayView({
           .gd-container { border: none; }
           .gd-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           .gd-closure { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .gd-closed-zone { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           .gd-row--available,
           .gd-row--unavailable { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .gd-legend { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
 
         /* Responsive */
@@ -872,8 +950,10 @@ export default function GanttDayView({
             width: 120px;
             min-width: 120px;
           }
-          .gd-avatar { display: none; }
+          .gd-role-badge { width: 10px; height: 10px; }
           .gd-name-text { font-size: 11px; }
+          .gd-legend { gap: 12px; }
+          .gd-legend-label { font-size: 10px; }
         }
       `}</style>
     </>

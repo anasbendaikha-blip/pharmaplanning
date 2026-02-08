@@ -2,8 +2,10 @@
  * WeekGanttView — Vue Gantt semaine globale
  *
  * Affiche 7 colonnes (Lun-Dim) avec barres miniatures par employe.
+ * Pastille couleur par employe (PAS de titres de categories).
  * Disponibilites etudiants : fond vert (dispo) / rouge (non dispo).
  * Clic cellule -> switch vers vue jour. Clic barre -> editer.
+ * Legende en footer.
  *
  * Conventions : styled-jsx, prefix "wg-", pas d'emojis, ASCII uniquement.
  */
@@ -24,15 +26,6 @@ const ROLE_COLORS: Record<EmployeeCategory, string> = {
   etudiant: '#2563eb',
 };
 
-const ROLE_LABELS: Record<EmployeeCategory, string> = {
-  pharmacien_titulaire: 'Ph. Tit.',
-  pharmacien_adjoint: 'Ph. Adj.',
-  preparateur: 'Prep.',
-  rayonniste: 'Ray.',
-  apprenti: 'App.',
-  etudiant: 'Etud.',
-};
-
 const CATEGORY_ORDER: EmployeeCategory[] = [
   'pharmacien_titulaire',
   'pharmacien_adjoint',
@@ -40,6 +33,14 @@ const CATEGORY_ORDER: EmployeeCategory[] = [
   'rayonniste',
   'apprenti',
   'etudiant',
+];
+
+const LEGEND_ITEMS: { label: string; color: string }[] = [
+  { label: 'Pharmacien Titulaire', color: '#dc2626' },
+  { label: 'Pharmacien Adjoint', color: '#ea580c' },
+  { label: 'Preparateur', color: '#16a34a' },
+  { label: 'Apprenti', color: '#7c3aed' },
+  { label: 'Etudiant', color: '#2563eb' },
 ];
 
 const DAY_NAMES = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
@@ -97,12 +98,6 @@ function formatDayNum(isoDate: string): string {
 function getDayOfWeek(dateStr: string): number {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, m - 1, d).getDay();
-}
-
-function formatShiftShort(shift: Shift): string {
-  const sh = shift.start_time.slice(0, -3 + shift.start_time.length).replace(':00', 'h').replace(':', 'h');
-  const eh = shift.end_time.slice(0, -3 + shift.end_time.length).replace(':00', 'h').replace(':', 'h');
-  return `${sh}-${eh}`;
 }
 
 function formatTimeCompact(time: string): string {
@@ -213,28 +208,19 @@ export default function WeekGanttView({
             <div className="wg-empty">Aucun employe actif</div>
           ) : (
             sortedEmployees.map((emp, index) => {
-              const prevCategory = index > 0 ? sortedEmployees[index - 1].category : null;
-              const showCategorySep = emp.category !== prevCategory;
               const empWeekHours = weeklyHours.get(emp.id) || 0;
               const isStudent = emp.category === 'etudiant';
 
               return (
                 <div key={emp.id}>
-                  {/* Category separator */}
-                  {showCategorySep && (
-                    <div className="wg-cat-sep">
-                      <span className="wg-cat-dot" style={{ backgroundColor: ROLE_COLORS[emp.category] }} />
-                      <span className="wg-cat-label">{ROLE_LABELS[emp.category]}</span>
-                    </div>
-                  )}
-
-                  {/* Employee row */}
+                  {/* Employee row — NO category separator headers */}
                   <div className={`wg-row ${index % 2 === 0 ? 'wg-row--even' : ''}`}>
-                    {/* Name */}
+                    {/* Name with color badge (no category title) */}
                     <div className="wg-row-name">
-                      <span className="wg-avatar" style={{ backgroundColor: ROLE_COLORS[emp.category] }}>
-                        {emp.first_name.charAt(0)}{emp.last_name.charAt(0)}
-                      </span>
+                      <div
+                        className="wg-role-badge"
+                        style={{ backgroundColor: ROLE_COLORS[emp.category] }}
+                      />
                       <span className="wg-name-text">
                         {emp.first_name} {emp.last_name.charAt(0)}.
                       </span>
@@ -254,7 +240,7 @@ export default function WeekGanttView({
                       const isAvailable = availIndex.get(availKey) ?? true;
 
                       let cellBg = '';
-                      if (isStudent && hasAvail) {
+                      if (isStudent && hasAvail && cellShifts.length === 0) {
                         cellBg = isAvailable ? 'wg-cell--available' : 'wg-cell--unavailable';
                       }
 
@@ -287,7 +273,7 @@ export default function WeekGanttView({
                                       {formatTimeCompact(shift.start_time)}-{formatTimeCompact(shift.end_time)}
                                     </span>
                                     {showPause && (
-                                      <span className="wg-bar-pause">P{Math.floor(shift.break_duration / 60)}h{shift.break_duration % 60 > 0 ? (shift.break_duration % 60).toString() : ''}</span>
+                                      <span className="wg-bar-pause">P{shift.break_duration}min</span>
                                     )}
                                   </div>
                                 );
@@ -307,6 +293,16 @@ export default function WeekGanttView({
               );
             })
           )}
+        </div>
+
+        {/* Legend footer */}
+        <div className="wg-legend">
+          {LEGEND_ITEMS.map(item => (
+            <div key={item.label} className="wg-legend-item">
+              <span className="wg-legend-dot" style={{ backgroundColor: item.color }} />
+              <span className="wg-legend-label">{item.label}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -340,7 +336,7 @@ export default function WeekGanttView({
           height: 100%;
           background: white;
           border: 1px solid var(--color-neutral-200, #e5e7eb);
-          border-radius: 8px;
+          border-radius: 12px;
           overflow: hidden;
         }
 
@@ -446,31 +442,7 @@ export default function WeekGanttView({
           font-size: 14px;
         }
 
-        /* Category separator */
-        .wg-cat-sep {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 4px 12px;
-          background: var(--color-neutral-100, #f3f4f6);
-          border-bottom: 1px solid var(--color-neutral-200, #e5e7eb);
-        }
-
-        .wg-cat-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-        }
-
-        .wg-cat-label {
-          font-size: 10px;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          color: var(--color-neutral-500, #6b7280);
-        }
-
-        /* Employee row */
+        /* Employee row — no category separators */
         .wg-row {
           display: flex;
           min-height: ${ROW_HEIGHT}px;
@@ -481,28 +453,22 @@ export default function WeekGanttView({
           background: rgba(0, 0, 0, 0.01);
         }
 
-        /* Name */
+        /* Name with badge */
         .wg-row-name {
           width: ${SIDEBAR_WIDTH}px;
           min-width: ${SIDEBAR_WIDTH}px;
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 4px 10px;
+          gap: 10px;
+          padding: 4px 12px;
           border-right: 1px solid var(--color-neutral-200, #e5e7eb);
           overflow: hidden;
         }
 
-        .wg-avatar {
-          width: 24px;
-          height: 24px;
+        .wg-role-badge {
+          width: 12px;
+          height: 12px;
           border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 9px;
-          font-weight: 700;
-          color: white;
           flex-shrink: 0;
         }
 
@@ -641,6 +607,36 @@ export default function WeekGanttView({
           font-weight: 700;
         }
 
+        /* Legend footer */
+        .wg-legend {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 20px;
+          padding: 12px 16px;
+          border-top: 1px solid var(--color-neutral-200, #e5e7eb);
+          background: var(--color-neutral-50, #f9fafb);
+          flex-shrink: 0;
+        }
+
+        .wg-legend-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .wg-legend-dot {
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+
+        .wg-legend-label {
+          font-size: 12px;
+          font-weight: 500;
+          color: #6b7280;
+        }
+
         /* Tooltip */
         .wg-tooltip {
           position: fixed;
@@ -690,6 +686,7 @@ export default function WeekGanttView({
           .wg-shift-bar { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
           .wg-cell--available,
           .wg-cell--unavailable { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+          .wg-legend { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
 
         /* Responsive */
@@ -699,13 +696,15 @@ export default function WeekGanttView({
             width: 100px;
             min-width: 100px;
           }
-          .wg-avatar { display: none; }
+          .wg-role-badge { width: 8px; height: 8px; }
           .wg-bar-text { font-size: 9px; }
           .wg-header-total,
           .wg-total {
             width: 40px;
             min-width: 40px;
           }
+          .wg-legend { gap: 12px; }
+          .wg-legend-label { font-size: 10px; }
         }
       `}</style>
     </>
