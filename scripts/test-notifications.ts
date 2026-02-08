@@ -62,7 +62,7 @@ async function testNotifications() {
 
   const testEmployee = employees[0];
   const testName = `${testEmployee.first_name} ${testEmployee.last_name}`.trim();
-  const testEmail = `${testEmployee.first_name.toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`;
+  const testEmail = `${testEmployee.first_name.toLowerCase().replace(/\s/g, '')}@pharmacie-coquelicots.fr`;
   console.log(`✅ Employe de test: ${testName} (${testEmail})`);
   console.log(`   ID: ${testEmployee.id}\n`);
 

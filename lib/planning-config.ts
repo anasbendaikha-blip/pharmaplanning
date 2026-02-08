@@ -11,11 +11,11 @@ import type { EmployeeCategory } from '@/lib/types';
 
 /** Heures de début/fin de la timeline */
 export const TIMELINE_START = 8;
-export const TIMELINE_END = 22;
+export const TIMELINE_END = 21;
 export const TIMELINE_SPAN = TIMELINE_END - TIMELINE_START;
 
 /** Tick marks sur la timeline */
-export const TIMELINE_TICKS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22];
+export const TIMELINE_TICKS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21];
 export const TIMELINE_TICKS_COMPACT = [8, 12, 16, 20];
 
 // ═══════════════════════════════════════════════════════
@@ -45,12 +45,24 @@ export const ZONE_OUVERTURE: PlanningZone = {
   zIndex: 0,
 };
 
-/** Zone de garde — Créneau après fermeture */
+/** Zone coupure midi — Pause meridienne */
+export const ZONE_COUPURE: PlanningZone = {
+  id: 'coupure',
+  label: 'Coupure',
+  start: '12:30',
+  end: '13:30',
+  color: 'rgba(226, 232, 240, 0.5)',     // slate-200 @ 50%
+  borderColor: '#cbd5e1',
+  textColor: '#64748b',
+  zIndex: 0,
+};
+
+/** Zone de garde — Creneau apres fermeture */
 export const ZONE_GARDE: PlanningZone = {
   id: 'garde',
   label: 'Garde',
-  start: '20:30',
-  end: '22:00',
+  start: '19:00',
+  end: '21:00',
   color: 'rgba(147, 51, 234, 0.06)',    // purple-600 @ 6%
   borderColor: 'rgba(147, 51, 234, 0.2)',
   textColor: '#9333ea',
@@ -58,7 +70,7 @@ export const ZONE_GARDE: PlanningZone = {
 };
 
 /** Toutes les zones */
-export const PLANNING_ZONES: PlanningZone[] = [ZONE_OUVERTURE, ZONE_GARDE];
+export const PLANNING_ZONES: PlanningZone[] = [ZONE_OUVERTURE, ZONE_COUPURE, ZONE_GARDE];
 
 // ═══════════════════════════════════════════════════════
 // Couleurs
@@ -245,6 +257,11 @@ export function getDynamicPlanningZones(): PlanningZone[] {
         start: h.preOuvertureDebut || ZONE_OUVERTURE.start,
         end: h.preOuvertureFin || ZONE_OUVERTURE.end,
       },
+      ...(h.coupureDebut && h.coupureFin ? [{
+        ...ZONE_COUPURE,
+        start: h.coupureDebut,
+        end: h.coupureFin,
+      }] : [ZONE_COUPURE]),
       {
         ...ZONE_GARDE,
         start: h.gardeDebut || ZONE_GARDE.start,

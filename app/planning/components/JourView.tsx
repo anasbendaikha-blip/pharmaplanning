@@ -44,6 +44,7 @@ interface JourViewProps {
   onToggleCategory: (cat: EmployeeCategory) => void;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
   onDispoCTA?: (target: QuickAssignTarget) => void;
+  poubelleResponsableId?: string | null;
 }
 
 export default function JourView({
@@ -61,6 +62,7 @@ export default function JourView({
   onToggleCategory,
   onCellClick,
   onDispoCTA,
+  poubelleResponsableId,
 }: JourViewProps) {
   // Shifts du jour uniquement
   const dayShifts = useMemo(() => shifts.filter(s => s.date === date), [shifts, date]);
@@ -204,6 +206,7 @@ export default function JourView({
                     showEmployeeColumn={showEmployeeColumn}
                     onCellClick={onCellClick}
                     onDispoCTA={onDispoCTA}
+                    isPoubelle={poubelleResponsableId === emp.id}
                   />
                 ))}
               </div>
@@ -467,6 +470,20 @@ export default function JourView({
           line-height: 1.2;
         }
 
+        .jv-poubelle-badge {
+          display: inline-block;
+          margin-left: 4px;
+          font-size: 9px;
+          font-weight: 700;
+          color: #92400e;
+          background: #fef3c7;
+          border: 1px solid #fcd34d;
+          border-radius: 3px;
+          padding: 0 3px;
+          line-height: 1.4;
+          vertical-align: middle;
+        }
+
         .jv-emp-subtitle {
           font-size: 10px;
           color: var(--color-neutral-400);
@@ -708,6 +725,7 @@ interface JourViewRowProps {
   showEmployeeColumn: boolean;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
   onDispoCTA?: (target: QuickAssignTarget) => void;
+  isPoubelle?: boolean;
 }
 
 const JourViewRow = memo(function JourViewRow({
@@ -721,6 +739,7 @@ const JourViewRow = memo(function JourViewRow({
   showEmployeeColumn,
   onCellClick,
   onDispoCTA,
+  isPoubelle,
 }: JourViewRowProps) {
   const totalHours = empShifts.reduce((sum, s) => sum + s.effective_hours, 0);
   const hasConflicts = conflicts.some(c => c.severity === 'error');
@@ -801,7 +820,7 @@ const JourViewRow = memo(function JourViewRow({
             )}
           </div>
           <div className="jv-emp-info">
-            <span className="jv-emp-name">{employee.first_name} {employee.last_name}</span>
+            <span className="jv-emp-name">{employee.first_name} {employee.last_name}{isPoubelle && <span className="jv-poubelle-badge">(p)</span>}</span>
             <span className="jv-emp-subtitle">{subtitle}</span>
           </div>
         </div>

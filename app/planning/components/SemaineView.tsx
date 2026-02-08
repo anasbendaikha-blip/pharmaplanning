@@ -46,6 +46,7 @@ interface SemaineViewProps {
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
   onShiftDrop: (shiftId: string, employeeId: string, toDate: string) => void;
   onDayClick: (dayIndex: number) => void;
+  poubelleResponsableIds?: Map<string, string>;
 }
 
 export default function SemaineView({
@@ -65,6 +66,7 @@ export default function SemaineView({
   onCellClick,
   onShiftDrop,
   onDayClick,
+  poubelleResponsableIds,
 }: SemaineViewProps) {
   // Jours ouvrables uniquement (Lun-Sam = index 0-5)
   const workDays = useMemo(() => weekDates.slice(0, 6), [weekDates]);
@@ -241,6 +243,7 @@ export default function SemaineView({
                         onCellClick={onCellClick}
                         onShiftDrop={onShiftDrop}
                         onDayClick={onDayClick}
+                        poubelleResponsableIds={poubelleResponsableIds}
                       />
                     ))}
                   </div>
@@ -530,6 +533,20 @@ export default function SemaineView({
           line-height: 1.2;
         }
 
+        .sv-poubelle-badge {
+          display: inline-block;
+          margin-left: 3px;
+          font-size: 8px;
+          font-weight: 700;
+          color: #92400e;
+          background: #fef3c7;
+          border: 1px solid #fcd34d;
+          border-radius: 3px;
+          padding: 0 2px;
+          line-height: 1.4;
+          vertical-align: middle;
+        }
+
         .sv-emp-meta {
           font-size: 9px;
           color: var(--color-neutral-400);
@@ -754,6 +771,7 @@ function SemaineViewRow({
   onCellClick,
   onShiftDrop,
   onDayClick,
+  poubelleResponsableIds,
 }: {
   employee: Employee;
   workDays: string[];
@@ -769,6 +787,7 @@ function SemaineViewRow({
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
   onShiftDrop: (shiftId: string, employeeId: string, toDate: string) => void;
   onDayClick: (dayIndex: number) => void;
+  poubelleResponsableIds?: Map<string, string>;
 }) {
   const weeklyTotal = weeklyShifts.reduce((sum, s) => sum + s.effective_hours, 0);
   const hoursDiff = weeklyTotal - employee.contract_hours;
@@ -811,7 +830,12 @@ function SemaineViewRow({
             )}
           </div>
           <div className="sv-emp-info">
-            <span className="sv-emp-name">{employee.first_name} {employee.last_name}</span>
+            <span className="sv-emp-name">
+              {employee.first_name} {employee.last_name}
+              {poubelleResponsableIds && Array.from(poubelleResponsableIds.values()).includes(employee.id) && (
+                <span className="sv-poubelle-badge">(p)</span>
+              )}
+            </span>
             <span className="sv-emp-meta">{employee.contract_hours}h/sem</span>
           </div>
         </div>

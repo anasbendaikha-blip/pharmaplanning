@@ -71,7 +71,7 @@ export default function EmployePlanningPage() {
       // Auto-select employee matching user email
       if (!selectedEmployee && user?.email && emps.length > 0) {
         const match = emps.find(e => {
-          const genEmail = `${(e.first_name || '').toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`;
+          const genEmail = `${(e.first_name || '').toLowerCase().replace(/\s/g, '')}@pharmacie-coquelicots.fr`;
           return genEmail === user.email;
         });
         setSelectedEmployee(match ? match.id : emps[0].id);

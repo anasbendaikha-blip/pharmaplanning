@@ -39,20 +39,22 @@ export const DEFAULT_PHARMACIE_INFO: PharmacieInfo = {
 
 export const DEFAULT_HORAIRES_CONFIG: HorairesConfig = {
   ouverture: {
-    0: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-    1: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-    2: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-    3: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-    4: { is_open: true, slots: [{ start: '08:30', end: '19:30' }] },
-    5: { is_open: true, slots: [{ start: '08:30', end: '13:00' }] },
-    6: { is_open: false, slots: [] },
+    0: { is_open: true, slots: [{ start: '08:30', end: '12:30' }, { start: '13:30', end: '19:00' }] }, // Lun
+    1: { is_open: true, slots: [{ start: '08:30', end: '12:30' }, { start: '13:30', end: '19:00' }] }, // Mar
+    2: { is_open: true, slots: [{ start: '08:30', end: '12:30' }, { start: '13:30', end: '19:00' }] }, // Mer
+    3: { is_open: true, slots: [{ start: '08:30', end: '12:30' }, { start: '13:30', end: '19:00' }] }, // Jeu
+    4: { is_open: true, slots: [{ start: '08:30', end: '12:30' }, { start: '13:30', end: '19:00' }] }, // Ven
+    5: { is_open: true, slots: [{ start: '09:00', end: '17:00' }] }, // Sam (non-stop)
+    6: { is_open: false, slots: [] }, // Dim
   },
   preOuvertureDebut: '08:00',
   preOuvertureFin: '08:30',
-  gardeDebut: '20:30',
-  gardeFin: '22:00',
+  gardeDebut: '19:00',
+  gardeFin: '21:00',
+  coupureDebut: '12:30',
+  coupureFin: '13:30',
   timelineStart: 8,
-  timelineEnd: 22,
+  timelineEnd: 21,
 };
 
 export const DEFAULT_PLANNING_RULES: PlanningRulesConfig = {

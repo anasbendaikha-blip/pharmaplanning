@@ -10,7 +10,7 @@
  * - Bouton "Tout marquer lu"
  *
  * Resolution employeeId : matche l'email du user auth avec l'email genere
- * des employes (pattern firstname@pharmacie-maurer.fr).
+ * des employes (pattern firstname@pharmacie-coquelicots.fr).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -91,7 +91,7 @@ export default function NotificationBell() {
         const matched = employees.find(
           (emp: Record<string, unknown>) => {
             const fn = (emp.first_name as string || '').toLowerCase().replace(/\s/g, '');
-            const generatedEmail = `${fn}@pharmacie-maurer.fr`;
+            const generatedEmail = `${fn}@pharmacie-coquelicots.fr`;
             return generatedEmail === user.email;
           },
         );

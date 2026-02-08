@@ -1,11 +1,11 @@
 /**
- * Données mock : 28 employés de la Pharmacie Isabelle MAURER
- * 5 catégories : pharmacien_titulaire, pharmacien_adjoint, preparateur, rayonniste, apprenti/etudiant
+ * Donnees mock : 10 employes de la Pharmacie des Coquelicots
+ * 5 categories : pharmacien_titulaire, pharmacien_adjoint, preparateur, apprenti, etudiant
  */
 
 import type { Employee, EmployeeCategory } from '@/lib/types';
 
-const ORG_ID = 'org-pharmacie-maurer';
+const ORG_ID = 'org-pharmacie-coquelicots';
 
 function makeEmployee(
   id: string,
@@ -20,7 +20,7 @@ function makeEmployee(
     organization_id: ORG_ID,
     first_name: firstName,
     last_name: lastName,
-    email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@pharmacie-maurer.fr`,
+    email: `${firstName.toLowerCase().replace(/\s/g, '')}.${lastName.toLowerCase().replace(/\s/g, '')}@pharmacie-coquelicots.fr`,
     phone: null,
     category,
     role: category === 'pharmacien_titulaire' ? 'titulaire'
@@ -53,45 +53,25 @@ function makeEmployee(
 }
 
 export const MOCK_EMPLOYEES: Employee[] = [
-  // --- Pharmaciens titulaires (2) ---
-  makeEmployee('emp-001', 'Isabelle', 'MAURER', 'pharmacien_titulaire', 35, '#2563eb'),
-  makeEmployee('emp-002', 'François', 'WEBER', 'pharmacien_titulaire', 35, '#2563eb'),
+  // --- Pharmacien titulaire (1) ---
+  makeEmployee('emp-001', 'Mustafa', 'UNLU', 'pharmacien_titulaire', 35, '#2563eb'),
 
-  // --- Pharmaciens adjoints (4) ---
-  makeEmployee('emp-003', 'Marie', 'DUPONT', 'pharmacien_adjoint', 35, '#3b82f6'),
-  makeEmployee('emp-004', 'Claire', 'BERNARD', 'pharmacien_adjoint', 35, '#3b82f6'),
-  makeEmployee('emp-005', 'Sophie', 'LAURENT', 'pharmacien_adjoint', 28, '#3b82f6'),
-  makeEmployee('emp-006', 'Antoine', 'MOREAU', 'pharmacien_adjoint', 35, '#3b82f6'),
+  // --- Pharmacien adjoint (1) ---
+  makeEmployee('emp-002', 'Tolga', 'PHARMACIEN', 'pharmacien_adjoint', 35, '#3b82f6'),
 
-  // --- Préparateurs en pharmacie (12) ---
-  makeEmployee('emp-007', 'Jean', 'MARTIN', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-008', 'Lucie', 'PETIT', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-009', 'Pierre', 'ROBERT', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-010', 'Camille', 'RICHARD', 'preparateur', 28, '#10b981'),
-  makeEmployee('emp-011', 'Nicolas', 'DURAND', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-012', 'Émilie', 'LEROY', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-013', 'Thomas', 'SIMON', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-014', 'Julie', 'MICHEL', 'preparateur', 28, '#10b981'),
-  makeEmployee('emp-015', 'Mathieu', 'GARCIA', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-016', 'Laura', 'DAVID', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-017', 'Sébastien', 'BERTRAND', 'preparateur', 35, '#10b981'),
-  makeEmployee('emp-018', 'Pauline', 'ROUX', 'preparateur', 28, '#10b981'),
-
-  // --- Rayonnistes (6) ---
-  makeEmployee('emp-019', 'Alain', 'FOURNIER', 'rayonniste', 35, '#f59e0b'),
-  makeEmployee('emp-020', 'Nathalie', 'MOREL', 'rayonniste', 35, '#f59e0b'),
-  makeEmployee('emp-021', 'Vincent', 'GIRARD', 'rayonniste', 28, '#f59e0b'),
-  makeEmployee('emp-022', 'Céline', 'ANDRE', 'rayonniste', 35, '#f59e0b'),
-  makeEmployee('emp-023', 'David', 'LEFEVRE', 'rayonniste', 35, '#f59e0b'),
-  makeEmployee('emp-024', 'Stéphanie', 'MERCIER', 'rayonniste', 28, '#f59e0b'),
+  // --- Preparateurs (2) ---
+  makeEmployee('emp-003', 'Lea', 'PREPARATRICE', 'preparateur', 35, '#10b981'),
+  makeEmployee('emp-004', 'Hanife', 'PREPARATRICE', 'preparateur', 35, '#10b981'),
 
   // --- Apprentis (2) ---
-  makeEmployee('emp-025', 'Léa', 'BONNET', 'apprenti', 35, '#8b5cf6'),
-  makeEmployee('emp-026', 'Hugo', 'LAMBERT', 'apprenti', 35, '#8b5cf6'),
+  makeEmployee('emp-005', 'Myriam', 'APPRENTIE', 'apprenti', 35, '#8b5cf6'),
+  makeEmployee('emp-006', 'Selena', 'APPRENTIE', 'apprenti', 35, '#8b5cf6'),
 
-  // --- Étudiants (2) ---
-  makeEmployee('emp-027', 'Chloé', 'FONTAINE', 'etudiant', 20, '#ec4899'),
-  makeEmployee('emp-028', 'Maxime', 'CHEVALIER', 'etudiant', 20, '#ec4899'),
+  // --- Etudiants (4) ---
+  makeEmployee('emp-007', 'Ensar', 'ETUDIANT', 'etudiant', 20, '#ec4899'),
+  makeEmployee('emp-008', 'Nisa', 'ETUDIANTE', 'etudiant', 20, '#ec4899'),
+  makeEmployee('emp-009', 'Mervenur', 'ETUDIANTE', 'etudiant', 20, '#ec4899'),
+  makeEmployee('emp-010', 'Mohamed', 'ETUDIANT', 'etudiant', 20, '#ec4899'),
 ];
 
 export const ORGANIZATION_ID = ORG_ID;

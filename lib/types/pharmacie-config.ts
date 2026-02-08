@@ -60,6 +60,10 @@ export interface HorairesConfig {
   gardeDebut: string;
   /** Heure de fin de la garde pharmaceutique (ex: "22:00") */
   gardeFin: string;
+  /** Heure de debut de la coupure midi (ex: "12:30"), null si pas de coupure */
+  coupureDebut: string | null;
+  /** Heure de fin de la coupure midi (ex: "13:30"), null si pas de coupure */
+  coupureFin: string | null;
   /** Heure de début de la timeline du planning */
   timelineStart: number;
   /** Heure de fin de la timeline du planning */

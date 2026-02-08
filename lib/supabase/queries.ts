@@ -59,7 +59,7 @@ interface DbShift {
  * Mapping des rôles DB → catégorie/role TypeScript
  * Pour Pharmacien, on utilise le nom de famille pour distinguer titulaire/adjoint
  */
-const TITULAIRE_NAMES = ['MAURER', 'WEBER'];
+const TITULAIRE_NAMES = ['UNLU'];
 
 function mapDbRole(dbRole: string, lastName: string | null): { category: EmployeeCategory; role: EmployeeRole } {
   switch (dbRole) {
@@ -109,7 +109,7 @@ function dbEmployeeToEmployee(row: DbEmployee): Employee {
     organization_id: row.organization_id,
     first_name: firstName,
     last_name: lastName,
-    email: row.email || `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`,
+    email: row.email || `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-coquelicots.fr`,
     phone: null,
     category: mapped.category,
     role: mapped.role,

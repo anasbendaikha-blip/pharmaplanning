@@ -45,7 +45,7 @@ export default function PortailEmployePage() {
 
       if (!selectedEmployee && user?.email && emps.length > 0) {
         const match = emps.find(e => {
-          const genEmail = `${(e.first_name || '').toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`;
+          const genEmail = `${(e.first_name || '').toLowerCase().replace(/\s/g, '')}@pharmacie-coquelicots.fr`;
           return genEmail === user.email;
         });
         if (match) setSelectedEmployee(match.id);

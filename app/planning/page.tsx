@@ -29,6 +29,7 @@ import { calculateWeekStats } from '@/lib/week-analytics';
 import { mergeFixedSlots } from '@/lib/horaires-fixes-service';
 import { MOCK_HORAIRES_FIXES } from './data/mockHorairesFixes';
 import { loadPharmacieConfig } from '@/lib/pharmacie-config-service';
+import { usePoubelleResponsable } from '@/lib/responsable-poubelle';
 
 import WeekNavigation from './components/WeekNavigation';
 import JourView from './components/JourView';
@@ -320,6 +321,13 @@ export default function PlanningPage() {
   const weekStats = useMemo(() => {
     return calculateWeekStats(weekDates, shifts);
   }, [weekDates, shifts]);
+
+  // ─── Responsable Poubelle ───
+  const activeEmployeeIds = useMemo(() => {
+    return employees.filter(e => e.is_active).map(e => e.id).sort();
+  }, [employees]);
+  const workDaysForPoubelle = useMemo(() => weekDates.slice(0, 6), [weekDates]);
+  const poubelle = usePoubelleResponsable(workDaysForPoubelle, activeEmployeeIds);
 
   const handleWeekChange = useCallback((newMonday: Date) => {
     setCurrentMonday(newMonday);
@@ -847,6 +855,7 @@ export default function PlanningPage() {
               onCellClick={handleCellClick}
               onShiftDrop={handleShiftDrop}
               onDayClick={handleDayClick}
+              poubelleResponsableIds={poubelle.responsables}
             />
           ) : (
             <JourView
@@ -864,6 +873,7 @@ export default function PlanningPage() {
               onToggleCategory={handleToggleCategory}
               onCellClick={handleCellClick}
               onDispoCTA={handleDispoCTA}
+              poubelleResponsableId={poubelle.responsables.get(selectedDate) || null}
             />
           )}
         </div>

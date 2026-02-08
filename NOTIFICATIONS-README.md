@@ -99,7 +99,7 @@ await NotificationService.send({
   priority: 'normal',
   organizationId: orgId,
   employeeId: empId,
-  recipientEmail: 'jean@pharmacie-maurer.fr',
+  recipientEmail: 'jean@pharmacie-coquelicots.fr',
   recipientName: 'Jean Dupont',
   title: 'Nouveau shift',
   message: 'Shift planifie le 2026-02-15',
@@ -151,19 +151,19 @@ Les logs console suivent un format structure :
 🔵 [API] POST /api/shifts
 📝 [API] Single shift mode
 ✅ [API] Shift created: abc-123
-📧 [API] Triggering notification for Jean Dupont (jean@pharmacie-maurer.fr)
+📧 [API] Triggering notification for Jean Dupont (jean@pharmacie-coquelicots.fr)
 🔔 [NotificationService] send() called
 📧 [NotificationService] Type: shift_created
-👤 [NotificationService] Recipient: jean@pharmacie-maurer.fr
+👤 [NotificationService] Recipient: jean@pharmacie-coquelicots.fr
 ⚙️ [NotificationService] Fetching employee preferences...
 ℹ️ [Preferences] No preferences found, using defaults for: emp-456
 ✅ [NotificationService] Preferences loaded: { emailEnabled: true, inAppEnabled: true }
 📧 [NotificationService] Sending email notification...
 📧 [Email] Looking for template: shift_created
 ✅ [Email] Template found, subject: Nouveau shift planifie le 2026-02-15
-📧 [Email] Sending to: jean@pharmacie-maurer.fr
-[Notification Email] Email envoye: xxx a jean@pharmacie-maurer.fr
-✅ [Email] Sent successfully to jean@pharmacie-maurer.fr
+📧 [Email] Sending to: jean@pharmacie-coquelicots.fr
+[Notification Email] Email envoye: xxx a jean@pharmacie-coquelicots.fr
+✅ [Email] Sent successfully to jean@pharmacie-coquelicots.fr
 📱 [NotificationService] Saving in-app notification...
 📱 [InApp] Saving to database...
 ✅ [InApp] Saved successfully

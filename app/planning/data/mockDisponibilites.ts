@@ -1,10 +1,10 @@
 /**
- * Données mock : Disponibilités des employés
- * Génère des disponibilités réalistes pour une semaine donnée
+ * Donnees mock : Disponibilites des employes
+ * Pharmacie des Coquelicots — 10 employes
  *
- * Convention: ~60% des employés ont des disponibilités déclarées
- * Les pharmaciens titulaires sont toujours disponibles (full-time)
- * Les étudiants ont des dispos partielles (cours universitaires)
+ * Convention: ~60% des employes ont des disponibilites declarees
+ * Les pharmaciens sont toujours disponibles (full-time)
+ * Les etudiants ont des dispos partielles (cours universitaires)
  */
 
 import type { Disponibilite, DispoType } from '@/lib/types';
@@ -38,176 +38,82 @@ function makeDispo(
 }
 
 /**
- * Génère les disponibilités mock pour une semaine (Lun-Sam)
- * @param weekDates - Tableau de 7 dates ISO (lundi à dimanche)
+ * Genere les disponibilites mock pour une semaine (Lun-Sam)
+ * @param weekDates - Tableau de 7 dates ISO (lundi a dimanche)
  */
 export function generateMockDisponibilites(weekDates: string[]): Disponibilite[] {
   dispoCounter = 0;
   const dispos: Disponibilite[] = [];
   const workDays = weekDates.slice(0, 6); // Lun-Sam
 
-  // ─── Pharmaciens Titulaires : full dispo ───
-  // emp-001 (Isabelle MAURER) : disponible tous les jours
+  // --- Pharmacien Titulaire : full dispo ---
+  // emp-001 (Mustafa UNLU) : disponible tous les jours
   for (const date of workDays) {
     dispos.push(makeDispo('emp-001', date, 'available', '08:00', '20:00'));
   }
 
-  // emp-002 (François WEBER) : disponible Lun-Ven
-  for (const date of workDays.slice(0, 5)) {
+  // --- Pharmacien Adjoint ---
+  // emp-002 (Tolga PHARMACIEN) : disponible Lun-Sam
+  for (const date of workDays) {
     dispos.push(makeDispo('emp-002', date, 'available', '08:00', '20:00'));
   }
 
-  // ─── Pharmaciens Adjoints : la plupart avec dispos ───
-  // emp-003 (Marie DUPONT) : Lun-Ven, préfère le matin
+  // --- Preparateurs ---
+  // emp-003 (Lea PREPARATRICE) : Lun-Ven, prefere le matin
   for (const date of workDays.slice(0, 5)) {
-    dispos.push(makeDispo('emp-003', date, 'preferred', '08:00', '14:00', 'Préfère le matin'));
-    dispos.push(makeDispo('emp-003', date, 'available', '14:00', '19:30'));
+    dispos.push(makeDispo('emp-003', date, 'preferred', '08:00', '13:00', 'Prefere le matin'));
+    dispos.push(makeDispo('emp-003', date, 'available', '13:00', '19:00'));
   }
 
-  // emp-004 (Claire BERNARD) : Lun-Sam full
+  // emp-004 (Hanife PREPARATRICE) : Lun-Sam full
   for (const date of workDays) {
-    dispos.push(makeDispo('emp-004', date, 'available', '08:30', '19:30'));
+    dispos.push(makeDispo('emp-004', date, 'available', '08:30', '19:00'));
   }
 
-  // emp-005 (Sophie LAURENT) : temps partiel - Lun, Mar, Jeu seulement
-  const sophieDays = [workDays[0], workDays[1], workDays[3]]; // Lun, Mar, Jeu
-  for (const date of sophieDays) {
-    dispos.push(makeDispo('emp-005', date, 'available', '08:30', '17:00', 'Temps partiel 28h'));
-  }
-
-  // emp-006 (Antoine MOREAU) : Lun-Ven, indisponible mercredi après-midi
-  for (let i = 0; i < 5; i++) {
-    if (i === 2) { // Mercredi
-      dispos.push(makeDispo('emp-006', workDays[i], 'available', '08:30', '13:00', 'Indispo mercredi PM'));
-      dispos.push(makeDispo('emp-006', workDays[i], 'unavailable', '13:00', '19:30', 'Enfants'));
-    } else {
-      dispos.push(makeDispo('emp-006', workDays[i], 'available', '08:30', '19:30'));
-    }
-  }
-
-  // ─── Préparateurs : dispos variées ───
-  // emp-007 (Jean MARTIN) : Lun-Sam full
-  for (const date of workDays) {
-    dispos.push(makeDispo('emp-007', date, 'available', '08:30', '19:30'));
-  }
-
-  // emp-008 (Lucie PETIT) : Lun-Ven, indispo samedi
-  for (const date of workDays.slice(0, 5)) {
-    dispos.push(makeDispo('emp-008', date, 'available', '08:30', '19:30'));
-  }
-
-  // emp-009 (Pierre ROBERT) : Lun-Sam, préfère l'après-midi
-  for (const date of workDays) {
-    dispos.push(makeDispo('emp-009', date, 'available', '08:30', '13:00'));
-    dispos.push(makeDispo('emp-009', date, 'preferred', '13:00', '19:30', 'Préfère après-midi'));
-  }
-
-  // emp-010 (Camille RICHARD) : temps partiel 28h, Lun-Mer-Ven
-  const camilleDays = [workDays[0], workDays[2], workDays[4]]; // Lun, Mer, Ven
-  for (const date of camilleDays) {
-    dispos.push(makeDispo('emp-010', date, 'available', '08:30', '19:00'));
-  }
-
-  // emp-011 (Nicolas DURAND) : Lun-Ven full
-  for (const date of workDays.slice(0, 5)) {
-    dispos.push(makeDispo('emp-011', date, 'available', '08:30', '19:30'));
-  }
-
-  // emp-012 (Émilie LEROY) : Lun-Sam, indispo jeudi
-  for (let i = 0; i < 6; i++) {
-    if (i === 3) continue; // Jeudi : pas de dispo
-    dispos.push(makeDispo('emp-012', workDays[i], 'available', '08:30', '19:30'));
-  }
-
-  // emp-013 (Thomas SIMON) : Lun-Ven, disponible seulement matin le mercredi
-  for (let i = 0; i < 5; i++) {
-    if (i === 2) { // Mercredi
-      dispos.push(makeDispo('emp-013', workDays[i], 'available', '08:00', '13:00'));
-    } else {
-      dispos.push(makeDispo('emp-013', workDays[i], 'available', '08:00', '19:30'));
-    }
-  }
-  // Sam : disponible
-  dispos.push(makeDispo('emp-013', workDays[5], 'available', '08:30', '14:00'));
-
-  // emp-014 (Julie MICHEL) : temps partiel, Mar-Jeu-Sam
-  const julieDays = [workDays[1], workDays[3], workDays[5]]; // Mar, Jeu, Sam
-  for (const date of julieDays) {
-    dispos.push(makeDispo('emp-014', date, 'available', '08:30', '18:00'));
-  }
-
-  // emp-015 (Mathieu GARCIA) : pas de dispo déclarée (on ne le met pas)
-  // → sera détecté par l'analytique comme "aucune dispo"
-
-  // emp-016 (Laura DAVID) : pas de dispo déclarée
-  // → sera détecté par l'analytique
-
-  // emp-017 (Sébastien BERTRAND) : Lun-Ven
-  for (const date of workDays.slice(0, 5)) {
-    dispos.push(makeDispo('emp-017', date, 'available', '09:00', '19:30'));
-  }
-
-  // emp-018 (Pauline ROUX) : temps partiel, Lun-Mar-Mer
+  // --- Apprentis ---
+  // emp-005 (Myriam APPRENTIE) : Lun-Mar-Mer seulement (ecole Jeu-Ven)
   for (const date of workDays.slice(0, 3)) {
-    dispos.push(makeDispo('emp-018', date, 'available', '08:30', '17:30'));
+    dispos.push(makeDispo('emp-005', date, 'available', '08:30', '19:00'));
+  }
+  // Jeu-Ven : indisponible (ecole)
+  dispos.push(makeDispo('emp-005', workDays[3], 'unavailable', '08:00', '19:00', 'Ecole'));
+  dispos.push(makeDispo('emp-005', workDays[4], 'unavailable', '08:00', '19:00', 'Ecole'));
+
+  // emp-006 (Selena APPRENTIE) : Mer-Jeu-Ven seulement (ecole Lun-Mar)
+  dispos.push(makeDispo('emp-006', workDays[0], 'unavailable', '08:00', '19:00', 'Ecole'));
+  dispos.push(makeDispo('emp-006', workDays[1], 'unavailable', '08:00', '19:00', 'Ecole'));
+  for (let i = 2; i < 5; i++) {
+    dispos.push(makeDispo('emp-006', workDays[i], 'available', '08:30', '19:00'));
   }
 
-  // ─── Rayonnistes : dispos variables ───
-  // emp-019 (Alain FOURNIER) : Lun-Sam full
-  for (const date of workDays) {
-    dispos.push(makeDispo('emp-019', date, 'available', '08:30', '19:30'));
+  // --- Etudiants ---
+  // emp-007 (Ensar ETUDIANT) : Lun-Mer-Ven apres-midi + Sam matin
+  const ensarPM = [workDays[0], workDays[2], workDays[4]];
+  for (const date of ensarPM) {
+    dispos.push(makeDispo('emp-007', date, 'available', '13:00', '19:00', 'Cours le matin'));
   }
+  dispos.push(makeDispo('emp-007', workDays[5], 'available', '09:00', '13:00', 'Samedi matin'));
 
-  // emp-020 (Nathalie MOREL) : Lun-Ven, préfère matin
-  for (const date of workDays.slice(0, 5)) {
-    dispos.push(makeDispo('emp-020', date, 'preferred', '08:30', '14:00', 'Matin préféré'));
+  // emp-008 (Nisa ETUDIANTE) : Mar-Jeu apres-midi + Sam
+  const nisaPM = [workDays[1], workDays[3]];
+  for (const date of nisaPM) {
+    dispos.push(makeDispo('emp-008', date, 'available', '13:00', '19:00', 'Cours le matin'));
   }
+  dispos.push(makeDispo('emp-008', workDays[5], 'available', '09:00', '17:00', 'Samedi'));
 
-  // emp-021 (Vincent GIRARD) : temps partiel, pas de dispo déclarée
-  // → sera détecté par l'analytique
-
-  // emp-022 (Céline ANDRE) : Lun-Sam
-  for (const date of workDays) {
-    dispos.push(makeDispo('emp-022', date, 'available', '08:30', '19:30'));
+  // emp-009 (Mervenur ETUDIANTE) : Lun-Mer-Ven matin + Sam
+  const mervenurAM = [workDays[0], workDays[2], workDays[4]];
+  for (const date of mervenurAM) {
+    dispos.push(makeDispo('emp-009', date, 'available', '08:00', '13:00', 'Cours apres-midi'));
   }
+  dispos.push(makeDispo('emp-009', workDays[5], 'available', '09:00', '17:00', 'Samedi'));
 
-  // emp-023 (David LEFEVRE) : pas de dispo
-  // → sera détecté par l'analytique
-
-  // emp-024 (Stéphanie MERCIER) : temps partiel, Mar-Jeu-Sam
-  const stephDays = [workDays[1], workDays[3], workDays[5]];
-  for (const date of stephDays) {
-    dispos.push(makeDispo('emp-024', date, 'available', '08:30', '17:00'));
+  // emp-010 (Mohamed ETUDIANT) : Mar-Jeu matin + Sam
+  const mohamedAM = [workDays[1], workDays[3]];
+  for (const date of mohamedAM) {
+    dispos.push(makeDispo('emp-010', date, 'available', '08:00', '13:00', 'Cours apres-midi'));
   }
-
-  // ─── Apprentis ───
-  // emp-025 (Léa BONNET) : Lun-Mar-Jeu-Ven (mercredi = école)
-  const leaDays = [workDays[0], workDays[1], workDays[3], workDays[4]];
-  for (const date of leaDays) {
-    dispos.push(makeDispo('emp-025', date, 'available', '08:30', '18:00'));
-  }
-  dispos.push(makeDispo('emp-025', workDays[2], 'unavailable', '08:00', '19:30', 'École'));
-
-  // emp-026 (Hugo LAMBERT) : Lun-Mer-Ven (alternance)
-  const hugoDays = [workDays[0], workDays[2], workDays[4]];
-  for (const date of hugoDays) {
-    dispos.push(makeDispo('emp-026', date, 'available', '08:30', '18:00'));
-  }
-
-  // ─── Étudiants ───
-  // emp-027 (Chloé FONTAINE) : seulement après-midi Lun-Mer-Ven + samedi matin
-  const chloePM = [workDays[0], workDays[2], workDays[4]]; // Lun, Mer, Ven
-  for (const date of chloePM) {
-    dispos.push(makeDispo('emp-027', date, 'available', '13:00', '19:00', 'Cours le matin'));
-  }
-  dispos.push(makeDispo('emp-027', workDays[5], 'available', '08:30', '13:00', 'Samedi matin'));
-
-  // emp-028 (Maxime CHEVALIER) : Mar-Jeu après-midi + samedi
-  const maximePM = [workDays[1], workDays[3]]; // Mar, Jeu
-  for (const date of maximePM) {
-    dispos.push(makeDispo('emp-028', date, 'available', '14:00', '19:30', 'Cours le matin'));
-  }
-  dispos.push(makeDispo('emp-028', workDays[5], 'available', '08:30', '16:00', 'Samedi'));
+  dispos.push(makeDispo('emp-010', workDays[5], 'available', '09:00', '17:00', 'Samedi'));
 
   return dispos;
 }

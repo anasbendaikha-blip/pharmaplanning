@@ -238,7 +238,7 @@ async function lookupEmployee(
   const firstName = data.first_name || '';
   const lastName = data.last_name || '';
   const name = `${firstName} ${lastName}`.trim();
-  const email = `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-maurer.fr`;
+  const email = `${firstName.toLowerCase().replace(/\s/g, '')}@pharmacie-coquelicots.fr`;
 
   return { name, email };
 }

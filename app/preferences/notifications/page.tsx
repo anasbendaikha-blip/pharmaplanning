@@ -53,7 +53,7 @@ export default function NotificationPreferencesPage() {
         const matched = employees.find(
           (emp: Record<string, unknown>) => {
             const fn = (emp.first_name as string || '').toLowerCase().replace(/\s/g, '');
-            return `${fn}@pharmacie-maurer.fr` === user.email;
+            return `${fn}@pharmacie-coquelicots.fr` === user.email;
           },
         );
         setEmployeeId(matched ? (matched.id as string) : (employees[0].id as string));

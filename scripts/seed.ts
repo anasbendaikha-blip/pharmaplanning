@@ -1,9 +1,9 @@
 /**
- * Script de seed : insère les 28 employés de la Pharmacie Isabelle MAURER dans Supabase
+ * Script de seed : insere les 10 employes de la Pharmacie des Coquelicots dans Supabase
  *
  * Usage : npx tsx scripts/seed.ts
  *
- * Schéma DB employees:
+ * Schema DB employees:
  *   id (uuid auto), organization_id, name, first_name, last_name, initials, role, contract_hours, availability, preferences, status, created_at, updated_at
  */
 
@@ -23,56 +23,36 @@ interface SeedEmployee {
 }
 
 const EMPLOYEES: SeedEmployee[] = [
-  // Pharmaciens Titulaires (2) — role='Pharmacien'
-  { firstName: 'Isabelle', lastName: 'MAURER', initials: 'IM', role: 'Pharmacien', contractHours: 35 },
-  { firstName: 'François', lastName: 'WEBER', initials: 'FW', role: 'Pharmacien', contractHours: 35 },
+  // Pharmacien Titulaire (1) — role='Pharmacien', TITULAIRE_NAMES=['UNLU']
+  { firstName: 'Mustafa', lastName: 'UNLU', initials: 'MU', role: 'Pharmacien', contractHours: 35 },
 
-  // Pharmaciens Adjoints (4) — role='Pharmacien'
-  { firstName: 'Marie', lastName: 'DUPONT', initials: 'MD', role: 'Pharmacien', contractHours: 35 },
-  { firstName: 'Claire', lastName: 'BERNARD', initials: 'CB', role: 'Pharmacien', contractHours: 35 },
-  { firstName: 'Sophie', lastName: 'LAURENT', initials: 'SL', role: 'Pharmacien', contractHours: 28 },
-  { firstName: 'Antoine', lastName: 'MOREAU', initials: 'AM', role: 'Pharmacien', contractHours: 35 },
+  // Pharmacien Adjoint (1) — role='Pharmacien'
+  { firstName: 'Tolga', lastName: 'PHARMACIEN', initials: 'TP', role: 'Pharmacien', contractHours: 35 },
 
-  // Préparateurs (12)
-  { firstName: 'Jean', lastName: 'MARTIN', initials: 'JM', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Lucie', lastName: 'PETIT', initials: 'LP', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Pierre', lastName: 'ROBERT', initials: 'PR', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Camille', lastName: 'RICHARD', initials: 'CR', role: 'Preparateur', contractHours: 28 },
-  { firstName: 'Nicolas', lastName: 'DURAND', initials: 'ND', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Émilie', lastName: 'LEROY', initials: 'EL', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Thomas', lastName: 'SIMON', initials: 'TS', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Julie', lastName: 'MICHEL', initials: 'JMi', role: 'Preparateur', contractHours: 28 },
-  { firstName: 'Mathieu', lastName: 'GARCIA', initials: 'MG', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Laura', lastName: 'DAVID', initials: 'LD', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Sébastien', lastName: 'BERTRAND', initials: 'SB', role: 'Preparateur', contractHours: 35 },
-  { firstName: 'Pauline', lastName: 'ROUX', initials: 'PRo', role: 'Preparateur', contractHours: 28 },
-
-  // Rayonnistes (6) — DB role 'Conditionneur'
-  { firstName: 'Alain', lastName: 'FOURNIER', initials: 'AF', role: 'Conditionneur', contractHours: 35 },
-  { firstName: 'Nathalie', lastName: 'MOREL', initials: 'NM', role: 'Conditionneur', contractHours: 35 },
-  { firstName: 'Vincent', lastName: 'GIRARD', initials: 'VG', role: 'Conditionneur', contractHours: 28 },
-  { firstName: 'Céline', lastName: 'ANDRE', initials: 'CA', role: 'Conditionneur', contractHours: 35 },
-  { firstName: 'David', lastName: 'LEFEVRE', initials: 'DL', role: 'Conditionneur', contractHours: 35 },
-  { firstName: 'Stéphanie', lastName: 'MERCIER', initials: 'SM', role: 'Conditionneur', contractHours: 28 },
+  // Preparateurs (2)
+  { firstName: 'Lea', lastName: 'PREPARATRICE', initials: 'LP', role: 'Preparateur', contractHours: 35 },
+  { firstName: 'Hanife', lastName: 'PREPARATRICE', initials: 'HP', role: 'Preparateur', contractHours: 35 },
 
   // Apprentis (2)
-  { firstName: 'Léa', lastName: 'BONNET', initials: 'LB', role: 'Apprenti', contractHours: 35 },
-  { firstName: 'Hugo', lastName: 'LAMBERT', initials: 'HL', role: 'Apprenti', contractHours: 35 },
+  { firstName: 'Myriam', lastName: 'APPRENTIE', initials: 'MA', role: 'Apprenti', contractHours: 35 },
+  { firstName: 'Selena', lastName: 'APPRENTIE', initials: 'SA', role: 'Apprenti', contractHours: 35 },
 
-  // Étudiants (2)
-  { firstName: 'Chloé', lastName: 'FONTAINE', initials: 'CF', role: 'Etudiant', contractHours: 20 },
-  { firstName: 'Maxime', lastName: 'CHEVALIER', initials: 'MC', role: 'Etudiant', contractHours: 20 },
+  // Etudiants (4)
+  { firstName: 'Ensar', lastName: 'ETUDIANT', initials: 'EE', role: 'Etudiant', contractHours: 20 },
+  { firstName: 'Nisa', lastName: 'ETUDIANTE', initials: 'NE', role: 'Etudiant', contractHours: 20 },
+  { firstName: 'Mervenur', lastName: 'ETUDIANTE', initials: 'ME', role: 'Etudiant', contractHours: 20 },
+  { firstName: 'Mohamed', lastName: 'ETUDIANT', initials: 'MoE', role: 'Etudiant', contractHours: 20 },
 ];
 
 async function seed() {
-  console.log('🏥 Seed PharmaPlanning — Pharmacie Isabelle MAURER');
-  console.log(`📍 Organization ID: ${ORG_ID}`);
-  console.log(`🔗 Supabase: ${SUPABASE_URL}`);
+  console.log('Seed PharmaPlanning — Pharmacie des Coquelicots');
+  console.log(`Organization ID: ${ORG_ID}`);
+  console.log(`Supabase: ${SUPABASE_URL}`);
   console.log('');
 
   const supabase = createClient(SUPABASE_URL, SERVICE_KEY);
 
-  // 1. Vérifier que l'organisation existe
+  // 1. Verifier que l'organisation existe
   const { data: org, error: orgError } = await supabase
     .from('organizations')
     .select('*')
@@ -80,36 +60,36 @@ async function seed() {
     .single();
 
   if (orgError || !org) {
-    console.error('❌ Organisation non trouvée. Création...');
+    console.error('Organisation non trouvee. Creation...');
     const { error: createErr } = await supabase.from('organizations').insert({
       id: ORG_ID,
-      name: 'Pharmacie Isabelle MAURER',
-      slug: 'pharmacie-isabelle-maurer',
+      name: 'Pharmacie des Coquelicots',
+      slug: 'pharmacie-des-coquelicots',
       primary_color: '#10b981',
       subscription_plan: 'trial',
     });
     if (createErr) {
-      console.error('❌ Impossible de créer l\'organisation:', createErr);
+      console.error('Impossible de creer l\'organisation:', createErr);
       process.exit(1);
     }
-    console.log('✅ Organisation créée');
+    console.log('Organisation creee');
   } else {
-    console.log(`✅ Organisation trouvée: ${org.name}`);
+    console.log(`Organisation trouvee: ${org.name}`);
   }
 
-  // 2. Supprimer les anciens employés de cette organisation (si relance)
+  // 2. Supprimer les anciens employes de cette organisation (si relance)
   const { error: delErr } = await supabase
     .from('employees')
     .delete()
     .eq('organization_id', ORG_ID);
 
   if (delErr) {
-    console.warn('⚠️  Impossible de nettoyer les anciens employés:', delErr.message);
+    console.warn('Impossible de nettoyer les anciens employes:', delErr.message);
   } else {
-    console.log('🧹 Anciens employés nettoyés');
+    console.log('Anciens employes nettoyes');
   }
 
-  // 3. Insérer les 28 employés
+  // 3. Inserer les 10 employes
   let inserted = 0;
   let errors = 0;
 
@@ -126,18 +106,18 @@ async function seed() {
     });
 
     if (error) {
-      console.error(`  ❌ ${emp.firstName} ${emp.lastName}: ${error.message}`);
+      console.error(`  [ERREUR] ${emp.firstName} ${emp.lastName}: ${error.message}`);
       errors++;
     } else {
-      console.log(`  ✅ ${emp.firstName} ${emp.lastName} (${emp.role})`);
+      console.log(`  [OK] ${emp.firstName} ${emp.lastName} (${emp.role})`);
       inserted++;
     }
   }
 
   console.log('');
-  console.log(`📊 Résultat: ${inserted} insérés, ${errors} erreurs`);
+  console.log(`Resultat: ${inserted} inseres, ${errors} erreurs`);
 
-  // 4. Vérification
+  // 4. Verification
   const { data: check, error: checkErr } = await supabase
     .from('employees')
     .select('id, name, role, contract_hours')
@@ -146,15 +126,15 @@ async function seed() {
     .order('name');
 
   if (checkErr) {
-    console.error('❌ Erreur vérification:', checkErr);
+    console.error('Erreur verification:', checkErr);
   } else {
-    console.log(`\n🔍 Vérification: ${check.length} employés en base`);
+    console.log(`\nVerification: ${check.length} employes en base`);
     check.forEach((e: { name: string; role: string; contract_hours: number }) => {
       console.log(`   ${e.role}: ${e.name} (${e.contract_hours}h)`);
     });
   }
 
-  console.log('\n✅ Seed terminé !');
+  console.log('\nSeed termine !');
 }
 
 seed().catch(console.error);
