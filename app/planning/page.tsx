@@ -36,6 +36,7 @@ import JourView from './components/JourView';
 import SemaineView from './components/SemaineView';
 import PaperView from './components/PaperView';
 import GrilleView from './components/GrilleView';
+import GanttDayView from './components/GanttDayView';
 import ConflictSummary from './components/ConflictSummary';
 import ShiftModal from './components/ShiftModal';
 import QuickAssignPanel from './components/QuickAssignPanel';
@@ -72,8 +73,8 @@ function getPlanningRulesFromConfig() {
   };
 }
 
-/** Mode de vue : jour, semaine, grille ou papier */
-type ViewMode = 'jour' | 'semaine' | 'grille' | 'paper';
+/** Mode de vue : gantt (defaut), jour, semaine, grille ou papier */
+type ViewMode = 'gantt' | 'jour' | 'semaine' | 'grille' | 'paper';
 
 /** Filtre catégorie */
 type FilterType = 'all' | EmployeeCategory;
@@ -107,8 +108,8 @@ export default function PlanningPage() {
   const isCurrentWeek = isSameDay(currentMonday, todayMonday);
   const todayStr = toISODateString(today);
 
-  // Mode de vue : jour, semaine ou papier
-  const [viewMode, setViewMode] = useState<ViewMode>('jour');
+  // Mode de vue : gantt par defaut
+  const [viewMode, setViewMode] = useState<ViewMode>('gantt');
 
   // Filtre catégorie
   const [filter, setFilter] = useState<FilterType>('all');
@@ -146,7 +147,7 @@ export default function PlanningPage() {
   // Persister les préférences
   useEffect(() => {
     const saved = localStorage.getItem('planning_view_mode');
-    if (saved === 'jour' || saved === 'semaine' || saved === 'grille' || saved === 'paper') {
+    if (saved === 'gantt' || saved === 'jour' || saved === 'semaine' || saved === 'grille' || saved === 'paper') {
       setViewMode(saved);
     }
     const savedDays = localStorage.getItem('planning_paper_days');
@@ -390,6 +391,14 @@ export default function PlanningPage() {
     setModalState({ isOpen: true, employee, date, existingShift: shift });
   }, [employees]);
 
+  // ─── Handler : clic sur timeline vide (Gantt) → ouvre modal avec heure pre-remplie ───
+  const handleCreateAtTime = useCallback((employeeId: string, date: string, _startTime: string) => {
+    const employee = employees.find(e => e.id === employeeId);
+    if (!employee) return;
+    // Ouvrir le modal en mode creation pour cet employe et cette date
+    setModalState({ isOpen: true, employee, date, existingShift: null });
+  }, [employees]);
+
   // ─── Handler : clic sur jour en semaine → switch vue jour ───
   const handleDayClick = useCallback((dayIndex: number) => {
     setSelectedDayIndex(dayIndex);
@@ -575,6 +584,13 @@ export default function PlanningPage() {
               {/* Toggle Semaine / Jour */}
               <div className="pl-view-tabs">
                 <button
+                  className={`pl-view-tab ${viewMode === 'gantt' ? 'pl-view-tab--active' : ''}`}
+                  onClick={() => setViewMode('gantt')}
+                  type="button"
+                >
+                  Gantt
+                </button>
+                <button
                   className={`pl-view-tab ${viewMode === 'grille' ? 'pl-view-tab--active' : ''}`}
                   onClick={() => setViewMode('grille')}
                   type="button"
@@ -744,8 +760,8 @@ export default function PlanningPage() {
             </div>
           </div>
 
-          {/* Day tabs (vue jour uniquement) */}
-          {viewMode === 'jour' && (
+          {/* Day tabs (vue jour et gantt) */}
+          {(viewMode === 'jour' || viewMode === 'gantt') && (
             <div className="pl-day-tabs">
               {DAY_TABS.map((label, i) => (
                 <button
@@ -822,6 +838,15 @@ export default function PlanningPage() {
               <span className="pl-spinner" />
               <span className="pl-loading-text">Chargement du planning...</span>
             </div>
+          ) : viewMode === 'gantt' ? (
+            <GanttDayView
+              employees={filteredEmployees}
+              shifts={shifts}
+              date={selectedDate}
+              todayStr={todayStr}
+              onCellClick={handleCellClick}
+              onCreateAtTime={handleCreateAtTime}
+            />
           ) : viewMode === 'grille' ? (
             <GrilleView
               employees={filteredEmployees}
@@ -1674,6 +1699,15 @@ export default function PlanningPage() {
       `}</style>
     </>
   );
+}
+
+/** Ajoute des heures a une heure "HH:MM", cap a 20:00 */
+function addTimeHours(time: string, hours: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const totalMin = h * 60 + m + hours * 60;
+  const newH = Math.min(20, Math.floor(totalMin / 60));
+  const newM = newH === 20 ? 0 : totalMin % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
 }
 
 /** Extrait le numéro de jour d'une date ISO "YYYY-MM-DD" → "03/02" */
