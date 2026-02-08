@@ -865,23 +865,23 @@ export default function CongesAnnuelPage() {
         </div>
       )}
 
-      <style jsx>{`
+      <style jsx global>{`
         /* ─── Page layout ─── */
         .annual-page { display: flex; flex-direction: column; gap: var(--spacing-5); }
 
         /* ─── Header ─── */
-        .page-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--spacing-3); }
-        .header-left { display: flex; flex-direction: column; gap: var(--spacing-1); }
-        .header-left :global(.back-link) {
+        .annual-page .page-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--spacing-3); }
+        .annual-page .header-left { display: flex; flex-direction: column; gap: var(--spacing-1); }
+        .annual-page .header-left .back-link {
           display: inline-flex; align-items: center; gap: var(--spacing-1);
           font-size: var(--font-size-xs); color: var(--color-primary-600);
           text-decoration: none; margin-bottom: var(--spacing-2);
         }
-        .header-left :global(.back-link:hover) { color: var(--color-primary-700); }
-        .page-title { font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: var(--color-neutral-900); margin: 0; }
-        .page-subtitle { font-size: var(--font-size-sm); color: var(--color-neutral-500); margin: 0; }
-        .header-actions { display: flex; gap: var(--spacing-2); flex-wrap: wrap; }
-        .btn-outline {
+        .annual-page .header-left .back-link:hover { color: var(--color-primary-700); }
+        .annual-page .page-title { font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: var(--color-neutral-900); margin: 0; }
+        .annual-page .page-subtitle { font-size: var(--font-size-sm); color: var(--color-neutral-500); margin: 0; }
+        .annual-page .header-actions { display: flex; gap: var(--spacing-2); flex-wrap: wrap; }
+        .annual-page .btn-outline {
           display: flex; align-items: center; gap: var(--spacing-2);
           padding: var(--spacing-2) var(--spacing-4); background: white;
           border: 1px solid var(--color-neutral-300); border-radius: var(--radius-md);
@@ -889,60 +889,60 @@ export default function CongesAnnuelPage() {
           font-weight: var(--font-weight-semibold); color: var(--color-neutral-700);
           cursor: pointer; transition: all 0.15s ease;
         }
-        .btn-outline:hover { background: var(--color-neutral-50); border-color: var(--color-neutral-400); }
+        .annual-page .btn-outline:hover { background: var(--color-neutral-50); border-color: var(--color-neutral-400); }
 
         /* ─── Year nav ─── */
-        .year-navigation {
+        .annual-page .year-navigation {
           display: flex; align-items: center; justify-content: space-between;
           padding: var(--spacing-3) var(--spacing-4); background: white;
           border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
-        .nav-btn {
+        .annual-page .nav-btn {
           display: flex; align-items: center; justify-content: center;
           width: 36px; height: 36px; background: white;
           border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md);
           cursor: pointer; color: var(--color-neutral-600); transition: all 0.15s ease;
         }
-        .nav-btn:hover { background: var(--color-neutral-50); border-color: var(--color-neutral-300); }
-        .year-center { display: flex; align-items: center; gap: var(--spacing-3); }
-        .year-title { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-neutral-900); margin: 0; }
-        .today-btn {
+        .annual-page .nav-btn:hover { background: var(--color-neutral-50); border-color: var(--color-neutral-300); }
+        .annual-page .year-center { display: flex; align-items: center; gap: var(--spacing-3); }
+        .annual-page .year-title { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-neutral-900); margin: 0; }
+        .annual-page .today-btn {
           padding: var(--spacing-1) var(--spacing-3);
           background: var(--color-primary-50); border: 1px solid var(--color-primary-200);
           border-radius: var(--radius-md); font-family: var(--font-family-primary);
           font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold);
           color: var(--color-primary-700); cursor: pointer; transition: all 0.15s ease;
         }
-        .today-btn:hover { background: var(--color-primary-100); }
+        .annual-page .today-btn:hover { background: var(--color-primary-100); }
 
         /* ─── Stats ─── */
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-4); }
-        .stat-card {
+        .annual-page .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-4); }
+        .annual-page .stat-card {
           display: flex; flex-direction: column; align-items: center; gap: var(--spacing-1);
           padding: var(--spacing-4); background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
-        .stat-value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-primary-600); }
-        .stat-value--accent { font-size: var(--font-size-base); color: var(--color-warning-600); }
-        .stat-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); color: var(--color-neutral-500); text-align: center; }
+        .annual-page .stat-value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-primary-600); }
+        .annual-page .stat-value--accent { font-size: var(--font-size-base); color: var(--color-warning-600); }
+        .annual-page .stat-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-medium); color: var(--color-neutral-500); text-align: center; }
 
         /* ─── Filters ─── */
-        .filters-section {
+        .annual-page .filters-section {
           display: flex; gap: var(--spacing-4); flex-wrap: wrap; padding: var(--spacing-4);
           background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
-        .filter-group { display: flex; flex-direction: column; gap: var(--spacing-1); flex: 1; min-width: 160px; }
-        .filter-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-neutral-600); text-transform: uppercase; letter-spacing: 0.03em; }
-        .filter-select {
+        .annual-page .filter-group { display: flex; flex-direction: column; gap: var(--spacing-1); flex: 1; min-width: 160px; }
+        .annual-page .filter-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-neutral-600); text-transform: uppercase; letter-spacing: 0.03em; }
+        .annual-page .filter-select {
           padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--color-neutral-300);
           border-radius: var(--radius-md); font-family: var(--font-family-primary);
           font-size: var(--font-size-sm); color: var(--color-neutral-700);
           background: white; cursor: pointer; transition: border-color 0.15s ease;
         }
-        .filter-select:focus { outline: none; border-color: var(--color-primary-500); box-shadow: 0 0 0 2px var(--color-primary-100); }
+        .annual-page .filter-select:focus { outline: none; border-color: var(--color-primary-500); box-shadow: 0 0 0 2px var(--color-primary-100); }
 
         /* ─── View toggle ─── */
-        .view-toggle { display: flex; gap: var(--spacing-2); }
-        .toggle-btn {
+        .annual-page .view-toggle { display: flex; gap: var(--spacing-2); }
+        .annual-page .toggle-btn {
           display: flex; align-items: center; gap: var(--spacing-2);
           padding: var(--spacing-2) var(--spacing-4); background: white;
           border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md);
@@ -950,20 +950,20 @@ export default function CongesAnnuelPage() {
           font-weight: var(--font-weight-medium); color: var(--color-neutral-600);
           cursor: pointer; transition: all 0.15s ease;
         }
-        .toggle-btn:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
-        .toggle-btn--active { background: var(--color-primary-600); border-color: var(--color-primary-600); color: white; }
-        .toggle-btn--active:hover { background: var(--color-primary-700); }
+        .annual-page .toggle-btn:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+        .annual-page .toggle-btn--active { background: var(--color-primary-600); border-color: var(--color-primary-600); color: white; }
+        .annual-page .toggle-btn--active:hover { background: var(--color-primary-700); }
 
         /* ─── Legend ─── */
-        .legend-section {
+        .annual-page .legend-section {
           display: flex; flex-wrap: wrap; gap: var(--spacing-4);
           padding: var(--spacing-3) var(--spacing-4);
           background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
-        .legend-item { display: flex; align-items: center; gap: var(--spacing-2); }
-        .legend-color { width: 12px; height: 12px; border-radius: var(--radius-sm); flex-shrink: 0; }
-        .legend-label { font-size: var(--font-size-xs); color: var(--color-neutral-600); font-weight: var(--font-weight-medium); }
-        .legend-count {
+        .annual-page .legend-item { display: flex; align-items: center; gap: var(--spacing-2); }
+        .annual-page .legend-color { width: 12px; height: 12px; border-radius: var(--radius-sm); flex-shrink: 0; }
+        .annual-page .legend-label { font-size: var(--font-size-xs); color: var(--color-neutral-600); font-weight: var(--font-weight-medium); }
+        .annual-page .legend-count {
           display: inline-flex; align-items: center; justify-content: center;
           min-width: 18px; height: 18px; padding: 0 4px;
           background: var(--color-neutral-100); border-radius: var(--radius-full);
@@ -971,24 +971,24 @@ export default function CongesAnnuelPage() {
         }
 
         /* ─── Sub navigation (month/week) ─── */
-        .sub-nav {
+        .annual-page .sub-nav {
           display: flex; align-items: center; justify-content: space-between;
           padding: var(--spacing-3) var(--spacing-4);
           border-bottom: 1px solid var(--color-neutral-200);
         }
-        .sub-nav-center { display: flex; align-items: center; gap: var(--spacing-3); }
-        .sub-nav-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); margin: 0; }
-        .today-btn-sm {
+        .annual-page .sub-nav-center { display: flex; align-items: center; gap: var(--spacing-3); }
+        .annual-page .sub-nav-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); margin: 0; }
+        .annual-page .today-btn-sm {
           padding: 2px var(--spacing-2); background: var(--color-primary-50);
           border: 1px solid var(--color-primary-200); border-radius: var(--radius-sm);
           font-family: var(--font-family-primary); font-size: 11px;
           font-weight: var(--font-weight-semibold); color: var(--color-primary-700);
           cursor: pointer; transition: all 0.15s ease;
         }
-        .today-btn-sm:hover { background: var(--color-primary-100); }
+        .annual-page .today-btn-sm:hover { background: var(--color-primary-100); }
 
         /* ─── Calendar section (shared) ─── */
-        .calendar-section {
+        .annual-page .calendar-section {
           background: white; border: 1px solid var(--color-neutral-200);
           border-radius: var(--radius-lg); overflow: hidden;
         }
@@ -996,112 +996,112 @@ export default function CongesAnnuelPage() {
         /* ════════════════════════════════════════════════
            VUE ANNUELLE — Calendrier mural 12 mois
            ════════════════════════════════════════════════ */
-        .calendar-wall {
+        .annual-page .calendar-wall {
           display: grid; grid-template-columns: repeat(4, 1fr);
           gap: 0; padding: 0;
         }
-        .month-card {
+        .annual-page .month-card {
           padding: var(--spacing-3);
           border-right: 1px solid var(--color-neutral-100);
           border-bottom: 1px solid var(--color-neutral-100);
         }
-        .month-card:nth-child(4n) { border-right: none; }
-        .month-card:nth-child(n+9) { border-bottom: none; }
+        .annual-page .month-card:nth-child(4n) { border-right: none; }
+        .annual-page .month-card:nth-child(n+9) { border-bottom: none; }
 
-        .month-card-header {
+        .annual-page .month-card-header {
           display: flex; align-items: center; justify-content: space-between;
           margin-bottom: var(--spacing-2); padding-bottom: var(--spacing-1);
           border-bottom: 1px solid var(--color-neutral-100);
         }
-        .month-card-title { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); }
-        .month-card-badge {
+        .annual-page .month-card-title { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); }
+        .annual-page .month-card-badge {
           display: inline-flex; align-items: center; justify-content: center;
           min-width: 20px; height: 20px; padding: 0 5px;
           background: var(--color-primary-100); color: var(--color-primary-700);
           border-radius: var(--radius-full); font-size: 11px; font-weight: var(--font-weight-bold);
         }
 
-        .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+        .annual-page .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
 
-        .day-header {
+        .annual-page .day-header {
           text-align: center; font-size: 9px; font-weight: var(--font-weight-bold);
           color: var(--color-neutral-400); padding: 2px 0 3px; text-transform: uppercase;
         }
-        .day-header--weekend { color: var(--color-neutral-300); }
+        .annual-page .day-header--weekend { color: var(--color-neutral-300); }
 
-        .day-cell {
+        .annual-page .day-cell {
           display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
           min-height: 32px; padding: 1px; border-radius: 3px;
           cursor: default; transition: background-color 0.1s ease;
         }
-        .day-cell--empty { min-height: 0; }
-        .day-cell--weekend { background: var(--color-neutral-50); }
-        .day-cell--weekend .day-number { color: var(--color-neutral-400); }
-        .day-cell--today { background: var(--color-primary-50); outline: 1px solid var(--color-primary-300); outline-offset: -1px; }
-        .day-cell--today .day-number { color: var(--color-primary-700); font-weight: var(--font-weight-bold); }
-        .day-cell--has-leaves { cursor: pointer; }
-        .day-cell--has-leaves:hover { background: var(--color-neutral-100); }
-        .day-cell--today.day-cell--has-leaves:hover { background: var(--color-primary-100); }
+        .annual-page .day-cell--empty { min-height: 0; }
+        .annual-page .day-cell--weekend { background: var(--color-neutral-50); }
+        .annual-page .day-cell--weekend .day-number { color: var(--color-neutral-400); }
+        .annual-page .day-cell--today { background: var(--color-primary-50); outline: 1px solid var(--color-primary-300); outline-offset: -1px; }
+        .annual-page .day-cell--today .day-number { color: var(--color-primary-700); font-weight: var(--font-weight-bold); }
+        .annual-page .day-cell--has-leaves { cursor: pointer; }
+        .annual-page .day-cell--has-leaves:hover { background: var(--color-neutral-100); }
+        .annual-page .day-cell--today.day-cell--has-leaves:hover { background: var(--color-primary-100); }
 
-        .day-number { font-size: 10px; font-weight: var(--font-weight-medium); color: var(--color-neutral-600); line-height: 1; margin-bottom: 1px; }
-        .day-dots { display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; }
-        .day-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
-        .day-dot-extra { font-size: 7px; font-weight: var(--font-weight-bold); color: var(--color-neutral-500); line-height: 5px; }
+        .annual-page .day-number { font-size: 10px; font-weight: var(--font-weight-medium); color: var(--color-neutral-600); line-height: 1; margin-bottom: 1px; }
+        .annual-page .day-dots { display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; }
+        .annual-page .day-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+        .annual-page .day-dot-extra { font-size: 7px; font-weight: var(--font-weight-bold); color: var(--color-neutral-500); line-height: 5px; }
 
         /* ════════════════════════════════════════════════
            VUE MENSUELLE — Un mois en grand
            ════════════════════════════════════════════════ */
-        .month-large-grid {
+        .annual-page .month-large-grid {
           display: grid; grid-template-columns: repeat(7, 1fr);
           gap: 0;
         }
-        .ml-day-header {
+        .annual-page .ml-day-header {
           text-align: center; font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
           color: var(--color-neutral-500); padding: var(--spacing-2);
           border-bottom: 2px solid var(--color-neutral-200);
           background: var(--color-neutral-50);
         }
-        .ml-day-header--weekend { color: var(--color-neutral-400); background: var(--color-neutral-100); }
+        .annual-page .ml-day-header--weekend { color: var(--color-neutral-400); background: var(--color-neutral-100); }
 
-        .ml-cell {
+        .annual-page .ml-cell {
           min-height: 90px; padding: var(--spacing-2);
           border-right: 1px solid var(--color-neutral-100);
           border-bottom: 1px solid var(--color-neutral-100);
           cursor: default; transition: background-color 0.1s ease;
           display: flex; flex-direction: column; gap: 2px;
         }
-        .ml-cell:nth-child(7n + 7) { border-right: none; } /* last column no right border */
-        .ml-cell--empty { min-height: 40px; background: var(--color-neutral-50); }
-        .ml-cell--weekend { background: var(--color-neutral-50); }
-        .ml-cell--today { background: var(--color-primary-50); }
-        .ml-cell--has-leaves { cursor: pointer; }
-        .ml-cell--has-leaves:hover { background: var(--color-neutral-100); }
-        .ml-cell--today.ml-cell--has-leaves:hover { background: var(--color-primary-100); }
+        .annual-page .ml-cell:nth-child(7n + 7) { border-right: none; }
+        .annual-page .ml-cell--empty { min-height: 40px; background: var(--color-neutral-50); }
+        .annual-page .ml-cell--weekend { background: var(--color-neutral-50); }
+        .annual-page .ml-cell--today { background: var(--color-primary-50); }
+        .annual-page .ml-cell--has-leaves { cursor: pointer; }
+        .annual-page .ml-cell--has-leaves:hover { background: var(--color-neutral-100); }
+        .annual-page .ml-cell--today.ml-cell--has-leaves:hover { background: var(--color-primary-100); }
 
-        .ml-day-number {
+        .annual-page .ml-day-number {
           font-size: var(--font-size-sm); font-weight: var(--font-weight-bold);
           color: var(--color-neutral-700); margin-bottom: 2px;
         }
-        .ml-cell--today .ml-day-number { color: var(--color-primary-700); }
-        .ml-cell--weekend .ml-day-number { color: var(--color-neutral-400); }
+        .annual-page .ml-cell--today .ml-day-number { color: var(--color-primary-700); }
+        .annual-page .ml-cell--weekend .ml-day-number { color: var(--color-neutral-400); }
 
-        .ml-leaves-list { display: flex; flex-direction: column; gap: 2px; }
-        .ml-leave-item { display: flex; align-items: center; gap: 4px; overflow: hidden; }
-        .ml-leave-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-        .ml-leave-name {
+        .annual-page .ml-leaves-list { display: flex; flex-direction: column; gap: 2px; }
+        .annual-page .ml-leave-item { display: flex; align-items: center; gap: 4px; overflow: hidden; }
+        .annual-page .ml-leave-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .annual-page .ml-leave-name {
           font-size: 11px; color: var(--color-neutral-700); font-weight: var(--font-weight-medium);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
-        .ml-leave-extra { font-size: 10px; color: var(--color-neutral-500); font-weight: var(--font-weight-semibold); }
+        .annual-page .ml-leave-extra { font-size: 10px; color: var(--color-neutral-500); font-weight: var(--font-weight-semibold); }
 
         /* ════════════════════════════════════════════════
            VUE HEBDOMADAIRE — Semaine detaillee
            ════════════════════════════════════════════════ */
-        .week-grid {
+        .annual-page .week-grid {
           display: grid; grid-template-columns: 160px repeat(7, 1fr);
           overflow-x: auto;
         }
-        .wk-header-corner {
+        .annual-page .wk-header-corner {
           padding: var(--spacing-3); font-size: var(--font-size-xs);
           font-weight: var(--font-weight-bold); color: var(--color-neutral-600);
           text-transform: uppercase; letter-spacing: 0.03em;
@@ -1110,60 +1110,60 @@ export default function CongesAnnuelPage() {
           background: var(--color-neutral-50);
           display: flex; align-items: center;
         }
-        .wk-header-day {
+        .annual-page .wk-header-day {
           display: flex; flex-direction: column; align-items: center; gap: 2px;
           padding: var(--spacing-2); border-bottom: 2px solid var(--color-neutral-200);
           border-right: 1px solid var(--color-neutral-100);
           background: var(--color-neutral-50);
         }
-        .wk-header-day:last-child { border-right: none; }
-        .wk-header-day--today { background: var(--color-primary-50); border-bottom-color: var(--color-primary-500); }
-        .wk-header-day--weekend { background: var(--color-neutral-100); }
-        .wk-header-dayname { font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); color: var(--color-neutral-700); }
-        .wk-header-date { font-size: 11px; color: var(--color-neutral-500); }
-        .wk-header-count {
+        .annual-page .wk-header-day:last-child { border-right: none; }
+        .annual-page .wk-header-day--today { background: var(--color-primary-50); border-bottom-color: var(--color-primary-500); }
+        .annual-page .wk-header-day--weekend { background: var(--color-neutral-100); }
+        .annual-page .wk-header-dayname { font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); color: var(--color-neutral-700); }
+        .annual-page .wk-header-date { font-size: 11px; color: var(--color-neutral-500); }
+        .annual-page .wk-header-count {
           display: inline-flex; align-items: center; justify-content: center;
           min-width: 18px; height: 16px; padding: 0 4px;
           background: var(--color-primary-100); color: var(--color-primary-700);
           border-radius: var(--radius-full); font-size: 10px; font-weight: var(--font-weight-bold);
         }
 
-        .wk-cell-emp {
+        .annual-page .wk-cell-emp {
           display: flex; flex-direction: column; justify-content: center; gap: 1px;
           padding: var(--spacing-2) var(--spacing-3);
           border-right: 1px solid var(--color-neutral-200);
           border-bottom: 1px solid var(--color-neutral-100);
           min-height: 48px;
         }
-        .wk-emp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .wk-emp-role { font-size: 11px; color: var(--color-neutral-400); }
+        .annual-page .wk-emp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .annual-page .wk-emp-role { font-size: 11px; color: var(--color-neutral-400); }
 
-        .wk-cell {
+        .annual-page .wk-cell {
           display: flex; flex-direction: column; align-items: stretch; justify-content: center;
           gap: 2px; padding: var(--spacing-1);
           border-right: 1px solid var(--color-neutral-100);
           border-bottom: 1px solid var(--color-neutral-100);
           min-height: 48px; transition: background-color 0.1s ease;
         }
-        .wk-cell:last-child { border-right: none; }
-        .wk-cell--weekend { background: var(--color-neutral-50); }
-        .wk-cell--today { background: var(--color-primary-50); }
-        .wk-cell--active { cursor: pointer; }
-        .wk-cell--active:hover { background: var(--color-neutral-100); }
-        .wk-cell--today.wk-cell--active:hover { background: var(--color-primary-100); }
+        .annual-page .wk-cell:last-child { border-right: none; }
+        .annual-page .wk-cell--weekend { background: var(--color-neutral-50); }
+        .annual-page .wk-cell--today { background: var(--color-primary-50); }
+        .annual-page .wk-cell--active { cursor: pointer; }
+        .annual-page .wk-cell--active:hover { background: var(--color-neutral-100); }
+        .annual-page .wk-cell--today.wk-cell--active:hover { background: var(--color-primary-100); }
 
-        .wk-leave-bar {
+        .annual-page .wk-leave-bar {
           padding: 2px 6px; border-radius: var(--radius-sm);
           display: flex; align-items: center; opacity: 0.9;
         }
-        .wk-leave-label { font-size: 10px; font-weight: var(--font-weight-semibold); color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .annual-page .wk-leave-label { font-size: 10px; font-weight: var(--font-weight-semibold); color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-        .wk-empty {
+        .annual-page .wk-empty {
           grid-column: 1 / -1; display: flex; flex-direction: column;
           align-items: center; gap: var(--spacing-3); padding: var(--spacing-8);
           text-align: center; color: var(--color-neutral-500); font-size: var(--font-size-sm);
         }
-        .wk-empty p { margin: 0; }
+        .annual-page .wk-empty p { margin: 0; }
 
         /* ─── Popover ─── */
         .day-popover {
@@ -1172,113 +1172,113 @@ export default function CongesAnnuelPage() {
           border-radius: var(--radius-lg); box-shadow: var(--shadow-xl);
           min-width: 240px; max-width: 320px; max-height: 300px; overflow-y: auto;
         }
-        .popover-header {
+        .day-popover .popover-header {
           display: flex; align-items: center; gap: var(--spacing-2);
           padding: var(--spacing-3); border-bottom: 1px solid var(--color-neutral-100);
           position: sticky; top: 0; background: white;
         }
-        .popover-date { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); flex: 1; }
-        .popover-count { font-size: var(--font-size-xs); color: var(--color-neutral-500); white-space: nowrap; }
-        .popover-close {
+        .day-popover .popover-date { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); flex: 1; }
+        .day-popover .popover-count { font-size: var(--font-size-xs); color: var(--color-neutral-500); white-space: nowrap; }
+        .day-popover .popover-close {
           display: flex; align-items: center; justify-content: center;
           width: 24px; height: 24px; background: transparent; border: none;
           border-radius: var(--radius-sm); cursor: pointer; color: var(--color-neutral-400);
           font-size: 16px; line-height: 1; transition: all 0.1s ease;
         }
-        .popover-close:hover { background: var(--color-neutral-100); color: var(--color-neutral-600); }
-        .popover-body { padding: var(--spacing-2) var(--spacing-3) var(--spacing-3); display: flex; flex-direction: column; gap: var(--spacing-2); }
-        .popover-leave { display: flex; align-items: flex-start; gap: var(--spacing-2); }
-        .popover-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
-        .popover-leave-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-        .popover-emp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-800); }
-        .popover-leave-type { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); }
-        .popover-leave-dates { font-size: var(--font-size-xs); color: var(--color-neutral-400); }
+        .day-popover .popover-close:hover { background: var(--color-neutral-100); color: var(--color-neutral-600); }
+        .day-popover .popover-body { padding: var(--spacing-2) var(--spacing-3) var(--spacing-3); display: flex; flex-direction: column; gap: var(--spacing-2); }
+        .day-popover .popover-leave { display: flex; align-items: flex-start; gap: var(--spacing-2); }
+        .day-popover .popover-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+        .day-popover .popover-leave-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .day-popover .popover-emp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-800); }
+        .day-popover .popover-leave-type { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); }
+        .day-popover .popover-leave-dates { font-size: var(--font-size-xs); color: var(--color-neutral-400); }
 
         /* ─── Monthly chart ─── */
-        .monthly-chart { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: var(--spacing-5); }
-        .section-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); margin: 0 0 var(--spacing-4); }
-        .chart-bars { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--spacing-2); align-items: end; }
-        .chart-col { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-1); }
-        .chart-bar-wrapper { width: 100%; height: 100px; display: flex; align-items: flex-end; justify-content: center; }
-        .chart-bar { width: 70%; min-height: 2px; background: var(--color-primary-400); border-radius: 3px 3px 0 0; transition: height 0.3s ease; }
-        .chart-label { font-size: 10px; color: var(--color-neutral-500); font-weight: var(--font-weight-medium); text-align: center; }
-        .chart-value { font-size: 11px; color: var(--color-primary-600); font-weight: var(--font-weight-bold); }
+        .annual-page .monthly-chart { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: var(--spacing-5); }
+        .annual-page .section-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); margin: 0 0 var(--spacing-4); }
+        .annual-page .chart-bars { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--spacing-2); align-items: end; }
+        .annual-page .chart-col { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-1); }
+        .annual-page .chart-bar-wrapper { width: 100%; height: 100px; display: flex; align-items: flex-end; justify-content: center; }
+        .annual-page .chart-bar { width: 70%; min-height: 2px; background: var(--color-primary-400); border-radius: 3px 3px 0 0; transition: height 0.3s ease; }
+        .annual-page .chart-label { font-size: 10px; color: var(--color-neutral-500); font-weight: var(--font-weight-medium); text-align: center; }
+        .annual-page .chart-value { font-size: 11px; color: var(--color-primary-600); font-weight: var(--font-weight-bold); }
 
         /* ─── Type breakdown ─── */
-        .type-breakdown { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: var(--spacing-5); }
-        .type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-3); }
-        .type-card { padding: var(--spacing-3); border: 1px solid var(--color-neutral-100); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--spacing-2); }
-        .type-header { display: flex; align-items: center; gap: var(--spacing-2); }
-        .type-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-        .type-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-700); }
-        .type-stats { display: flex; justify-content: space-between; align-items: baseline; }
-        .type-count { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); }
-        .type-pct { font-size: var(--font-size-xs); color: var(--color-neutral-500); }
-        .type-progress-track { height: 4px; background: var(--color-neutral-100); border-radius: 2px; overflow: hidden; }
-        .type-progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+        .annual-page .type-breakdown { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: var(--spacing-5); }
+        .annual-page .type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-3); }
+        .annual-page .type-card { padding: var(--spacing-3); border: 1px solid var(--color-neutral-100); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--spacing-2); }
+        .annual-page .type-header { display: flex; align-items: center; gap: var(--spacing-2); }
+        .annual-page .type-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .annual-page .type-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-700); }
+        .annual-page .type-stats { display: flex; justify-content: space-between; align-items: baseline; }
+        .annual-page .type-count { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); }
+        .annual-page .type-pct { font-size: var(--font-size-xs); color: var(--color-neutral-500); }
+        .annual-page .type-progress-track { height: 4px; background: var(--color-neutral-100); border-radius: 2px; overflow: hidden; }
+        .annual-page .type-progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
 
         /* ─── Print ─── */
         @media print {
-          .page-header, .filters-section, .header-actions, .view-toggle,
-          .nav-btn, .today-btn, .sub-nav { display: none !important; }
+          .annual-page .page-header, .annual-page .filters-section, .annual-page .header-actions, .annual-page .view-toggle,
+          .annual-page .nav-btn, .annual-page .today-btn, .annual-page .sub-nav { display: none !important; }
           .annual-page { gap: var(--spacing-3); }
-          .stats-grid, .calendar-section, .monthly-chart, .type-breakdown { break-inside: avoid; }
+          .annual-page .stats-grid, .annual-page .calendar-section, .annual-page .monthly-chart, .annual-page .type-breakdown { break-inside: avoid; }
           .day-popover { display: none !important; }
-          .day-cell--has-leaves:hover, .ml-cell--has-leaves:hover, .wk-cell--active:hover { background: transparent; }
+          .annual-page .day-cell--has-leaves:hover, .annual-page .ml-cell--has-leaves:hover, .annual-page .wk-cell--active:hover { background: transparent; }
         }
 
         /* ─── Responsive ─── */
         @media (max-width: 1200px) {
-          .calendar-wall { grid-template-columns: repeat(3, 1fr); }
-          .month-card:nth-child(3n) { border-right: none; }
-          .month-card:nth-child(4n) { border-right: 1px solid var(--color-neutral-100); }
-          .month-card:nth-child(n+10) { border-bottom: none; }
-          .month-card:nth-child(n+9) { border-bottom: 1px solid var(--color-neutral-100); }
+          .annual-page .calendar-wall { grid-template-columns: repeat(3, 1fr); }
+          .annual-page .month-card:nth-child(3n) { border-right: none; }
+          .annual-page .month-card:nth-child(4n) { border-right: 1px solid var(--color-neutral-100); }
+          .annual-page .month-card:nth-child(n+10) { border-bottom: none; }
+          .annual-page .month-card:nth-child(n+9) { border-bottom: 1px solid var(--color-neutral-100); }
         }
 
         @media (max-width: 900px) {
-          .page-header { flex-direction: column; }
-          .stats-grid { grid-template-columns: repeat(2, 1fr); }
-          .filters-section { flex-direction: column; }
-          .filter-group { min-width: 0; }
-          .view-toggle { flex-wrap: wrap; }
-          .chart-bars { grid-template-columns: repeat(6, 1fr); }
-          .chart-bar-wrapper { height: 60px; }
-          .type-grid { grid-template-columns: 1fr; }
+          .annual-page .page-header { flex-direction: column; }
+          .annual-page .stats-grid { grid-template-columns: repeat(2, 1fr); }
+          .annual-page .filters-section { flex-direction: column; }
+          .annual-page .filter-group { min-width: 0; }
+          .annual-page .view-toggle { flex-wrap: wrap; }
+          .annual-page .chart-bars { grid-template-columns: repeat(6, 1fr); }
+          .annual-page .chart-bar-wrapper { height: 60px; }
+          .annual-page .type-grid { grid-template-columns: 1fr; }
 
-          .calendar-wall { grid-template-columns: repeat(2, 1fr); }
-          .month-card { border-right: 1px solid var(--color-neutral-100) !important; border-bottom: 1px solid var(--color-neutral-100) !important; }
-          .month-card:nth-child(2n) { border-right: none !important; }
-          .month-card:nth-child(n+11) { border-bottom: none !important; }
+          .annual-page .calendar-wall { grid-template-columns: repeat(2, 1fr); }
+          .annual-page .month-card { border-right: 1px solid var(--color-neutral-100) !important; border-bottom: 1px solid var(--color-neutral-100) !important; }
+          .annual-page .month-card:nth-child(2n) { border-right: none !important; }
+          .annual-page .month-card:nth-child(n+11) { border-bottom: none !important; }
 
-          .ml-day-header { font-size: 11px; padding: var(--spacing-1); }
-          .ml-cell { min-height: 70px; padding: var(--spacing-1); }
-          .ml-leave-name { font-size: 10px; }
+          .annual-page .ml-day-header { font-size: 11px; padding: var(--spacing-1); }
+          .annual-page .ml-cell { min-height: 70px; padding: var(--spacing-1); }
+          .annual-page .ml-leave-name { font-size: 10px; }
 
-          .week-grid { grid-template-columns: 120px repeat(7, minmax(60px, 1fr)); }
-          .wk-emp-name { font-size: var(--font-size-xs); }
+          .annual-page .week-grid { grid-template-columns: 120px repeat(7, minmax(60px, 1fr)); }
+          .annual-page .wk-emp-name { font-size: var(--font-size-xs); }
         }
 
         @media (max-width: 640px) {
-          .header-actions { width: 100%; }
-          .btn-outline { flex: 1; justify-content: center; }
+          .annual-page .header-actions { width: 100%; }
+          .annual-page .btn-outline { flex: 1; justify-content: center; }
 
-          .calendar-wall { grid-template-columns: 1fr; }
-          .month-card { border-right: none !important; border-bottom: 1px solid var(--color-neutral-100) !important; }
-          .month-card:last-child { border-bottom: none !important; }
+          .annual-page .calendar-wall { grid-template-columns: 1fr; }
+          .annual-page .month-card { border-right: none !important; border-bottom: 1px solid var(--color-neutral-100) !important; }
+          .annual-page .month-card:last-child { border-bottom: none !important; }
 
-          .ml-day-header { font-size: 10px; }
-          .ml-cell { min-height: 60px; }
-          .ml-leave-item { display: none; }
-          .ml-cell--has-leaves .ml-day-number::after {
+          .annual-page .ml-day-header { font-size: 10px; }
+          .annual-page .ml-cell { min-height: 60px; }
+          .annual-page .ml-leave-item { display: none; }
+          .annual-page .ml-cell--has-leaves .ml-day-number::after {
             content: ''; display: inline-block; width: 6px; height: 6px;
             background: var(--color-primary-500); border-radius: 50%; margin-left: 4px; vertical-align: middle;
           }
 
-          .week-grid { grid-template-columns: 90px repeat(7, minmax(45px, 1fr)); }
-          .wk-emp-name { font-size: 11px; }
-          .wk-emp-role { display: none; }
-          .wk-leave-label { font-size: 8px; }
+          .annual-page .week-grid { grid-template-columns: 90px repeat(7, minmax(45px, 1fr)); }
+          .annual-page .wk-emp-name { font-size: 11px; }
+          .annual-page .wk-emp-role { display: none; }
+          .annual-page .wk-leave-label { font-size: 8px; }
         }
       `}</style>
     </>
