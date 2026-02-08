@@ -24,8 +24,8 @@ import {
 import type { Shift, Conflict, WeeklyOpeningHours, Employee, EmployeeCategory } from '@/lib/types';
 
 import WeekNavigation from './components/WeekNavigation';
-import WeekView from './components/WeekView';
-import DayView from './components/DayView';
+import JourView from './components/JourView';
+import SemaineView from './components/SemaineView';
 import PaperView from './components/PaperView';
 import ConflictSummary from './components/ConflictSummary';
 import ShiftModal from './components/ShiftModal';
@@ -43,8 +43,8 @@ const OPENING_HOURS: WeeklyOpeningHours = {
   6: { is_open: false, slots: [] },
 };
 
-/** Mode de vue */
-type ViewMode = 'week' | 'day' | 'paper';
+/** Mode de vue : jour, semaine ou papier */
+type ViewMode = 'jour' | 'semaine' | 'paper';
 
 /** Filtre catégorie */
 type FilterType = 'all' | EmployeeCategory;
@@ -52,13 +52,13 @@ type FilterType = 'all' | EmployeeCategory;
 /** Noms courts des jours */
 const DAY_TABS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
-/** Couleurs de légende */
+/** Couleurs de légende BaggPlanning */
 const LEGEND_ITEMS = [
-  { color: '#2563eb', label: 'Pharmacien' },
-  { color: '#10b981', label: 'Préparateur' },
-  { color: '#f59e0b', label: 'Rayonniste' },
-  { color: '#8b5cf6', label: 'Apprenti' },
-  { color: '#ec4899', label: 'Étudiant' },
+  { color: '#6366f1', label: 'Pharmacien' },
+  { color: '#6366f1', label: 'Préparateur' },
+  { color: '#a78bfa', label: 'Étudiant' },
+  { color: '#f59e0b', label: 'Pause' },
+  { color: '#ef4444', label: 'Congé' },
 ];
 
 /** État du modal d'édition */
@@ -87,8 +87,8 @@ export default function PlanningPage() {
   const isCurrentWeek = isSameDay(currentMonday, todayMonday);
   const todayStr = toISODateString(today);
 
-  // Mode de vue : semaine, jour ou papier
-  const [viewMode, setViewMode] = useState<ViewMode>('week');
+  // Mode de vue : jour, semaine ou papier
+  const [viewMode, setViewMode] = useState<ViewMode>('jour');
 
   // Filtre catégorie
   const [filter, setFilter] = useState<FilterType>('all');
@@ -96,13 +96,23 @@ export default function PlanningPage() {
   // Masquer employés sans shifts
   const [hideEmpty, setHideEmpty] = useState(false);
 
+  // Catégories repliées (partagées entre les deux vues)
+  const [collapsedCats, setCollapsedCats] = useState<Set<EmployeeCategory>>(new Set());
+
   // Nombre de jours affichés en mode papier (3, 5 ou 6)
   const [paperDaysCount, setPaperDaysCount] = useState(3);
+
+  // Jour sélectionné (index 0-5 = Lun-Sam) pour la vue jour
+  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
+    const dow = today.getDay();
+    if (dow >= 1 && dow <= 6) return dow - 1;
+    return 0;
+  });
 
   // Persister les préférences
   useEffect(() => {
     const saved = localStorage.getItem('planning_view_mode');
-    if (saved === 'week' || saved === 'day' || saved === 'paper') {
+    if (saved === 'jour' || saved === 'semaine' || saved === 'paper') {
       setViewMode(saved);
     }
     const savedDays = localStorage.getItem('planning_paper_days');
@@ -131,13 +141,6 @@ export default function PlanningPage() {
   useEffect(() => {
     localStorage.setItem('planning_hide_empty', String(hideEmpty));
   }, [hideEmpty]);
-
-  // Jour sélectionné (index 0-5 = Lun-Sam) pour la vue jour
-  const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
-    const dow = today.getDay();
-    if (dow >= 1 && dow <= 6) return dow - 1;
-    return 0;
-  });
 
   // Dates de la semaine courante (Lun-Dim, 7 dates)
   const weekDates = useMemo(() => {
@@ -209,17 +212,30 @@ export default function PlanningPage() {
     handleWeekChange(getMonday(new Date()));
   }, [handleWeekChange]);
 
-  // ─── Handlers ───
+  // ─── Toggle catégorie (partagé entre vues) ───
+  const handleToggleCategory = useCallback((cat: EmployeeCategory) => {
+    setCollapsedCats(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  }, []);
+
+  // ─── Handler : clic sur une cellule → ouvre modal ───
   const handleCellClick = useCallback((employeeId: string, date: string, shift: Shift | null) => {
     const employee = employees.find(e => e.id === employeeId);
     if (!employee) return;
     setModalState({ isOpen: true, employee, date, existingShift: shift });
   }, [employees]);
 
-  const handleDayViewCellClick = useCallback((employeeId: string, date: string, shift: Shift | null) => {
-    handleCellClick(employeeId, date, shift);
-  }, [handleCellClick]);
+  // ─── Handler : clic sur jour en semaine → switch vue jour ───
+  const handleDayClick = useCallback((dayIndex: number) => {
+    setSelectedDayIndex(dayIndex);
+    setViewMode('jour');
+  }, []);
 
+  // ─── Modal handlers ───
   const handleModalClose = useCallback(() => {
     setModalState(INITIAL_MODAL_STATE);
   }, []);
@@ -310,7 +326,7 @@ export default function PlanningPage() {
     <>
       <div className="planning-page">
         {/* ═══ Header ═══ */}
-        <div className="pl-header">
+        <header className="pl-header">
           <div className="pl-header-top">
             <h1 className="pl-title">Planning</h1>
 
@@ -325,18 +341,18 @@ export default function PlanningPage() {
             </div>
 
             <div className="pl-header-actions">
-              {/* Toggle vue */}
+              {/* Toggle Semaine / Jour */}
               <div className="pl-view-tabs">
                 <button
-                  className={`pl-view-tab ${viewMode === 'week' ? 'pl-view-tab--active' : ''}`}
-                  onClick={() => setViewMode('week')}
+                  className={`pl-view-tab ${viewMode === 'semaine' ? 'pl-view-tab--active' : ''}`}
+                  onClick={() => setViewMode('semaine')}
                   type="button"
                 >
                   Semaine
                 </button>
                 <button
-                  className={`pl-view-tab ${viewMode === 'day' ? 'pl-view-tab--active' : ''}`}
-                  onClick={() => setViewMode('day')}
+                  className={`pl-view-tab ${viewMode === 'jour' ? 'pl-view-tab--active' : ''}`}
+                  onClick={() => setViewMode('jour')}
                   type="button"
                 >
                   Jour
@@ -396,7 +412,7 @@ export default function PlanningPage() {
           </div>
 
           {/* Day tabs (vue jour uniquement) */}
-          {viewMode === 'day' && (
+          {viewMode === 'jour' && (
             <div className="pl-day-tabs">
               {DAY_TABS.map((label, i) => (
                 <button
@@ -417,7 +433,7 @@ export default function PlanningPage() {
             conflicts={validationResult.conflicts}
             pharmacistCoveragePercent={validationResult.pharmacistCoveragePercent}
           />
-        </div>
+        </header>
 
         {/* ═══ Content ═══ */}
         <div className="pl-content">
@@ -449,8 +465,8 @@ export default function PlanningPage() {
                 visibleDays={paperDaysCount}
               />
             </div>
-          ) : viewMode === 'week' ? (
-            <WeekView
+          ) : viewMode === 'semaine' ? (
+            <SemaineView
               employees={employees}
               shifts={shifts}
               conflicts={validationResult.conflicts}
@@ -458,16 +474,23 @@ export default function PlanningPage() {
               todayStr={todayStr}
               filter={filter}
               hideEmpty={hideEmpty}
+              collapsedCats={collapsedCats}
+              onToggleCategory={handleToggleCategory}
               onCellClick={handleCellClick}
               onShiftDrop={handleShiftDrop}
+              onDayClick={handleDayClick}
             />
           ) : (
-            <DayView
+            <JourView
               employees={employees}
               shifts={shifts}
               conflicts={validationResult.conflicts}
               date={selectedDate}
-              onCellClick={handleDayViewCellClick}
+              filter={filter}
+              hideEmpty={hideEmpty}
+              collapsedCats={collapsedCats}
+              onToggleCategory={handleToggleCategory}
+              onCellClick={handleCellClick}
             />
           )}
         </div>
