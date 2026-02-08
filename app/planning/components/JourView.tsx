@@ -110,7 +110,7 @@ export default function JourView({
   }, [dayShifts]);
 
   // Grid columns depend on showEmployeeColumn
-  const gridCols = showEmployeeColumn ? '190px 1fr 80px' : '1fr 80px';
+  const gridCols = showEmployeeColumn ? '160px 1fr 70px' : '1fr 70px';
 
   return (
     <>
@@ -353,8 +353,8 @@ export default function JourView({
         .jv-cat-header {
           display: flex;
           align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
+          gap: 6px;
+          padding: 5px 10px;
           background: var(--color-neutral-100);
           cursor: pointer;
           border-bottom: 1px solid var(--color-neutral-200);
@@ -379,10 +379,10 @@ export default function JourView({
           flex-shrink: 0;
         }
 
-        .jv-cat-icon { font-size: 14px; }
+        .jv-cat-icon { font-size: 12px; }
 
         .jv-cat-name {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           color: var(--color-neutral-600);
           text-transform: uppercase;
@@ -392,7 +392,7 @@ export default function JourView({
         /* ─── Employee row ─── */
         .jv-emp-row {
           display: grid;
-          min-height: 52px;
+          min-height: 40px;
           border-bottom: 1px solid var(--color-neutral-100);
           cursor: pointer;
           transition: background 0.1s;
@@ -409,23 +409,23 @@ export default function JourView({
 
         /* Employee info cell */
         .jv-emp-cell {
-          padding: 6px 10px;
+          padding: 4px 8px;
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           border-right: 2px solid var(--color-neutral-300);
         }
 
         .jv-emp-avatar {
-          width: 36px;
-          height: 36px;
+          width: 30px;
+          height: 30px;
           border-radius: 50%;
           color: white;
           display: flex;
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          font-size: 12px;
+          font-size: 11px;
           flex-shrink: 0;
           letter-spacing: 0.02em;
           position: relative;
@@ -433,13 +433,13 @@ export default function JourView({
 
         .jv-dispo-indicator {
           position: absolute;
-          bottom: -2px;
-          right: -2px;
-          width: 14px;
-          height: 14px;
+          bottom: -1px;
+          right: -1px;
+          width: 12px;
+          height: 12px;
           border-radius: 50%;
           border: 2px solid white;
-          font-size: 8px;
+          font-size: 7px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -457,25 +457,27 @@ export default function JourView({
         }
 
         .jv-emp-name {
-          font-size: 13px;
+          font-size: 12px;
           font-weight: 600;
           color: var(--color-neutral-900);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
           display: block;
+          line-height: 1.2;
         }
 
         .jv-emp-subtitle {
-          font-size: 11px;
+          font-size: 10px;
           color: var(--color-neutral-400);
           font-weight: 500;
+          line-height: 1.2;
         }
 
         /* ─── Timeline cell ─── */
         .jv-timeline-cell {
           position: relative;
-          padding: 6px 0;
+          padding: 4px 0;
         }
 
         /* Zone backgrounds in rows */
@@ -510,8 +512,8 @@ export default function JourView({
         /* CTA button on unused dispos */
         .jv-dispo-cta {
           position: absolute;
-          top: 6px;
-          bottom: 6px;
+          top: 4px;
+          bottom: 4px;
           z-index: ${Z_LAYERS.cta};
           border: 2px dashed rgba(34, 197, 94, 0.4);
           border-radius: 5px;
@@ -536,15 +538,15 @@ export default function JourView({
         }
 
         .jv-dispo-cta-icon {
-          width: 24px;
-          height: 24px;
+          width: 20px;
+          height: 20px;
           border-radius: 50%;
           background: #22c55e;
           color: white;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 16px;
+          font-size: 14px;
           font-weight: 700;
           box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
           transition: transform 0.15s;
@@ -577,9 +579,9 @@ export default function JourView({
         /* Shift slots */
         .jv-slot {
           position: absolute;
-          top: 6px;
-          bottom: 6px;
-          border-radius: 5px;
+          top: 4px;
+          bottom: 4px;
+          border-radius: 4px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -672,11 +674,12 @@ export default function JourView({
         /* ─── Responsive ─── */
         @media (max-width: 1024px) {
           .jv-emp-avatar {
-            width: 32px;
-            height: 32px;
-            font-size: 11px;
+            width: 26px;
+            height: 26px;
+            font-size: 10px;
           }
           .jv-slot-time { font-size: 10px; }
+          .jv-emp-name { font-size: 11px; }
         }
 
         /* ─── Print ─── */
@@ -775,7 +778,7 @@ const JourViewRow = memo(function JourViewRow({
     onCellClick(employee.id, date, empShifts.length > 0 ? empShifts[0] : null);
   }, [employee.id, date, empShifts, onCellClick]);
 
-  const gridCols = showEmployeeColumn ? '190px 1fr 80px' : '1fr 80px';
+  const gridCols = showEmployeeColumn ? '160px 1fr 70px' : '1fr 70px';
   const isNoDispo = showDispos && dispoIndicator === 'none';
 
   return (

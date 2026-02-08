@@ -62,6 +62,13 @@ export type {
   QuickAssignTarget,
 } from './quick-assign';
 
+// Horaires Fixes (Planning V2 Phase 5)
+export type {
+  HoraireFixes,
+  HorairesFixesConfig,
+  HorairesFixesResult,
+} from './horaires-fixes';
+
 // Gardes
 export type {
   GardeDuty,

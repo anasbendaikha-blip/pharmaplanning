@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   getMonday,
   getWeekDates,
@@ -26,6 +26,8 @@ import { LEGEND_ITEMS } from '@/lib/planning-config';
 import { generateMockDisponibilites } from './data/mockDisponibilites';
 import { analyzeWeeklyDispos, getAlertCounts, sortAlertsByPriority } from '@/lib/planning-analytics';
 import { calculateWeekStats } from '@/lib/week-analytics';
+import { mergeFixedSlots } from '@/lib/horaires-fixes-service';
+import { MOCK_HORAIRES_FIXES } from './data/mockHorairesFixes';
 
 import WeekNavigation from './components/WeekNavigation';
 import JourView from './components/JourView';
@@ -107,6 +109,11 @@ export default function PlanningPage() {
   // ─── V2 Phase 3: Quick Assign ───
   const [quickAssignTarget, setQuickAssignTarget] = useState<QuickAssignTarget | null>(null);
 
+  // ─── V2 Phase 5: Search & Shortcuts ───
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   // Jour sélectionné (index 0-5 = Lun-Sam) pour la vue jour
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
     const dow = today.getDay();
@@ -146,6 +153,82 @@ export default function PlanningPage() {
   useEffect(() => { localStorage.setItem('planning_show_zones', String(showZones)); }, [showZones]);
   useEffect(() => { localStorage.setItem('planning_show_emp_col', String(showEmployeeColumn)); }, [showEmployeeColumn]);
 
+  // ─── V2 Phase 5: Keyboard Shortcuts ───
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      // Don't intercept when typing in inputs
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+      // Alt+W → Semaine view
+      if (e.altKey && (e.key === 'w' || e.key === 'W')) {
+        e.preventDefault();
+        setViewMode('semaine');
+        return;
+      }
+
+      // Alt+D → Jour view
+      if (e.altKey && (e.key === 'd' || e.key === 'D')) {
+        e.preventDefault();
+        setViewMode('jour');
+        return;
+      }
+
+      // ← → Week navigation (without modifiers)
+      if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setCurrentMonday(prev => addDays(prev, -7));
+        return;
+      }
+      if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        setCurrentMonday(prev => addDays(prev, 7));
+        return;
+      }
+
+      // T → Today
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        setCurrentMonday(getMonday(new Date()));
+        return;
+      }
+
+      // Ctrl+F or Cmd+F → Focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      // / → Shortcuts help (like GitHub)
+      if (e.key === '/') {
+        e.preventDefault();
+        setShowShortcutsHelp(v => !v);
+        return;
+      }
+
+      // Escape → Close panels/modals
+      if (e.key === 'Escape') {
+        if (showShortcutsHelp) {
+          setShowShortcutsHelp(false);
+          return;
+        }
+        if (quickAssignTarget) {
+          setQuickAssignTarget(null);
+          return;
+        }
+        // Clear search
+        if (searchTerm) {
+          setSearchTerm('');
+          return;
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showShortcutsHelp, quickAssignTarget, searchTerm]);
+
   // Dates de la semaine courante (Lun-Dim, 7 dates)
   const weekDates = useMemo(() => {
     return getWeekDates(currentMonday).map(d => toISODateString(d));
@@ -174,6 +257,23 @@ export default function PlanningPage() {
       .finally(() => { if (!cancelled) setIsLoadingData(false); });
     return () => { cancelled = true; };
   }, [organizationId, orgLoading, weekDates]);
+
+  // ─── Filtered employees (V2 Phase 5 search) ───
+  const filteredEmployees = useMemo(() => {
+    if (!searchTerm.trim()) return employees;
+    const term = searchTerm.toLowerCase().trim();
+    return employees.filter(e =>
+      e.first_name.toLowerCase().includes(term) ||
+      e.last_name.toLowerCase().includes(term) ||
+      `${e.first_name} ${e.last_name}`.toLowerCase().includes(term)
+    );
+  }, [employees, searchTerm]);
+
+  // ─── Horaires Fixes auto-fill (V2 Phase 5) ───
+  const horairesFixesResult = useMemo(() => {
+    if (employees.length === 0) return null;
+    return mergeFixedSlots(MOCK_HORAIRES_FIXES, weekDates, shifts);
+  }, [employees, weekDates, shifts]);
 
   // ─── Disponibilités (V2 mock) ───
   const disponibilites = useMemo<Disponibilite[]>(() => {
@@ -302,6 +402,38 @@ export default function PlanningPage() {
 
     setQuickAssignTarget(null);
   }, [organizationId, employees, addToast]);
+
+  // ─── Horaires Fixes handler (V2 Phase 5) ───
+  const handleApplyHorairesFixes = useCallback(async () => {
+    if (!organizationId || !horairesFixesResult) return;
+    const toCreate = horairesFixesResult.shifts_to_create;
+    if (toCreate.length === 0) return;
+
+    let created = 0;
+    let failed = 0;
+
+    for (const slot of toCreate) {
+      const result = await dbCreateShift(organizationId, {
+        employee_id: slot.employee_id,
+        date: slot.date,
+        start_time: slot.start_time,
+        end_time: slot.end_time,
+        break_duration: slot.break_duration,
+      });
+      if (result) {
+        setShifts(prev => [...prev, result]);
+        created++;
+      } else {
+        failed++;
+      }
+    }
+
+    if (created > 0) {
+      addToast('success', `${created} horaires fixes appliqués${failed > 0 ? ` (${failed} erreurs)` : ''}`);
+    } else {
+      addToast('error', 'Erreur lors de l\'application des horaires fixes');
+    }
+  }, [organizationId, horairesFixesResult, addToast]);
 
   // ─── Modal handlers ───
   const handleModalClose = useCallback(() => {
@@ -434,6 +566,28 @@ export default function PlanningPage() {
                 </button>
               </div>
 
+              {/* Recherche employé */}
+              <div className="pl-search-wrap">
+                <span className="pl-search-icon">🔍</span>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="pl-search-input"
+                  placeholder="Rechercher… (Ctrl+F)"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+                {searchTerm && (
+                  <button
+                    className="pl-search-clear"
+                    onClick={() => setSearchTerm('')}
+                    type="button"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
               {/* Filtre catégorie */}
               <select
                 className="pl-filter-select"
@@ -521,7 +675,25 @@ export default function PlanningPage() {
                     ⚠️ {alertCounts.total}
                   </button>
                 )}
+                <button
+                  className="pl-mini-toggle"
+                  onClick={() => setShowShortcutsHelp(v => !v)}
+                  type="button"
+                  title="Raccourcis clavier (/)"
+                >
+                  ⌨️
+                </button>
               </div>
+            )}
+            {horairesFixesResult && horairesFixesResult.shifts_to_create.length > 0 && (
+              <button
+                className="pl-hf-badge"
+                onClick={handleApplyHorairesFixes}
+                type="button"
+                title={`${horairesFixesResult.shifts_to_create.length} shifts fixes à appliquer`}
+              >
+                📌 {horairesFixesResult.shifts_to_create.length} horaires fixes
+              </button>
             )}
 
             <div className="pl-legend">
@@ -637,7 +809,7 @@ export default function PlanningPage() {
             </div>
           ) : viewMode === 'semaine' ? (
             <SemaineView
-              employees={employees}
+              employees={filteredEmployees}
               shifts={shifts}
               conflicts={validationResult.conflicts}
               disponibilites={disponibilites}
@@ -656,7 +828,7 @@ export default function PlanningPage() {
             />
           ) : (
             <JourView
-              employees={employees}
+              employees={filteredEmployees}
               shifts={shifts}
               conflicts={validationResult.conflicts}
               disponibilites={disponibilites}
@@ -706,6 +878,37 @@ export default function PlanningPage() {
           onConfirm={handleQuickAssignConfirm}
           onClose={handleQuickAssignClose}
         />
+      )}
+
+      {/* Keyboard Shortcuts Help Modal (V2 Phase 5) */}
+      {showShortcutsHelp && (
+        <div className="pl-shortcuts-overlay" onClick={() => setShowShortcutsHelp(false)}>
+          <div className="pl-shortcuts-modal" onClick={e => e.stopPropagation()}>
+            <div className="pl-shortcuts-header">
+              <h3 className="pl-shortcuts-title">⌨️ Raccourcis clavier</h3>
+              <button className="pl-shortcuts-close" onClick={() => setShowShortcutsHelp(false)} type="button">✕</button>
+            </div>
+            <div className="pl-shortcuts-body">
+              <div className="pl-shortcut-group">
+                <h4 className="pl-shortcut-group-title">Navigation</h4>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">←</kbd> <span>Semaine précédente</span></div>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">→</kbd> <span>Semaine suivante</span></div>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">T</kbd> <span>Revenir à aujourd&apos;hui</span></div>
+              </div>
+              <div className="pl-shortcut-group">
+                <h4 className="pl-shortcut-group-title">Vues</h4>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">Alt</kbd>+<kbd className="pl-kbd">W</kbd> <span>Vue semaine</span></div>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">Alt</kbd>+<kbd className="pl-kbd">D</kbd> <span>Vue jour</span></div>
+              </div>
+              <div className="pl-shortcut-group">
+                <h4 className="pl-shortcut-group-title">Recherche & Aide</h4>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">Ctrl</kbd>+<kbd className="pl-kbd">F</kbd> <span>Rechercher un employé</span></div>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">/</kbd> <span>Afficher/masquer cette aide</span></div>
+                <div className="pl-shortcut-row"><kbd className="pl-kbd">Esc</kbd> <span>Fermer le panneau actif</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       <style jsx>{`
@@ -1194,6 +1397,194 @@ export default function PlanningPage() {
 
         .pl-print-btn:hover {
           background: var(--color-neutral-100);
+        }
+
+        /* ═══ Search (V2 Phase 5) ═══ */
+        .pl-search-wrap {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .pl-search-icon {
+          position: absolute;
+          left: 8px;
+          font-size: 12px;
+          pointer-events: none;
+          z-index: 1;
+        }
+
+        .pl-search-input {
+          padding: 5px 28px 5px 26px;
+          border: 1px solid var(--color-neutral-300);
+          border-radius: var(--radius-md);
+          font-family: var(--font-family-primary);
+          font-size: var(--font-size-xs);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-neutral-700);
+          background: white;
+          width: 160px;
+          transition: all 0.15s;
+        }
+
+        .pl-search-input:focus {
+          outline: none;
+          border-color: var(--color-primary-400);
+          width: 200px;
+          box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
+        }
+
+        .pl-search-input::placeholder {
+          color: var(--color-neutral-400);
+          font-size: 11px;
+        }
+
+        .pl-search-clear {
+          position: absolute;
+          right: 4px;
+          padding: 2px 4px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-size: 12px;
+          color: var(--color-neutral-400);
+          border-radius: var(--radius-sm);
+          transition: color 0.1s;
+        }
+
+        .pl-search-clear:hover {
+          color: var(--color-neutral-700);
+        }
+
+        /* ═══ Horaires Fixes Badge ═══ */
+        .pl-hf-badge {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 10px;
+          border: 1px solid var(--color-secondary-300);
+          border-radius: var(--radius-full);
+          background: var(--color-secondary-50);
+          cursor: pointer;
+          font-family: var(--font-family-primary);
+          font-size: 11px;
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-secondary-700);
+          transition: all 0.15s;
+          white-space: nowrap;
+        }
+
+        .pl-hf-badge:hover {
+          background: var(--color-secondary-100);
+          border-color: var(--color-secondary-400);
+        }
+
+        /* ═══ Shortcuts Help Modal ═══ */
+        .pl-shortcuts-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 100;
+          animation: pl-fade-in 0.15s ease-out;
+        }
+
+        @keyframes pl-fade-in {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+
+        .pl-shortcuts-modal {
+          background: white;
+          border-radius: var(--radius-lg);
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+          width: 420px;
+          max-width: 90vw;
+          max-height: 80vh;
+          overflow: hidden;
+          animation: pl-modal-up 0.2s ease-out;
+        }
+
+        @keyframes pl-modal-up {
+          from { transform: translateY(10px); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+
+        .pl-shortcuts-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--color-neutral-200);
+        }
+
+        .pl-shortcuts-title {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--color-neutral-900);
+        }
+
+        .pl-shortcuts-close {
+          padding: 4px 8px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-size: 16px;
+          color: var(--color-neutral-400);
+          border-radius: var(--radius-sm);
+          transition: all 0.1s;
+        }
+
+        .pl-shortcuts-close:hover {
+          background: var(--color-neutral-100);
+          color: var(--color-neutral-700);
+        }
+
+        .pl-shortcuts-body {
+          padding: 16px 20px;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          overflow-y: auto;
+          max-height: 60vh;
+        }
+
+        .pl-shortcut-group-title {
+          margin: 0 0 8px 0;
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.06em;
+          color: var(--color-neutral-500);
+        }
+
+        .pl-shortcut-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 0;
+          font-size: 13px;
+          color: var(--color-neutral-700);
+        }
+
+        .pl-kbd {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 24px;
+          height: 22px;
+          padding: 0 6px;
+          background: var(--color-neutral-100);
+          border: 1px solid var(--color-neutral-300);
+          border-radius: 4px;
+          font-family: var(--font-family-primary);
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--color-neutral-600);
+          box-shadow: 0 1px 0 var(--color-neutral-300);
         }
 
         /* ═══ Print ═══ */

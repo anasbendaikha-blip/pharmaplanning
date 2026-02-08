@@ -139,10 +139,10 @@ export default function SemaineView({
   }, [workDays, shifts]);
 
   // Grid columns
-  const empColWidth = showEmployeeColumn ? '190px' : '0px';
+  const empColWidth = showEmployeeColumn ? '150px' : '0px';
   const headerGridCols = showEmployeeColumn
-    ? '190px repeat(6, 1fr) 90px'
-    : 'repeat(6, 1fr) 90px';
+    ? '150px repeat(6, 1fr) 80px'
+    : 'repeat(6, 1fr) 80px';
   const rowGridCols = headerGridCols;
 
   return (
@@ -419,10 +419,10 @@ export default function SemaineView({
         .sv-cat-header:hover { background: var(--color-neutral-200); }
 
         .sv-cat-title {
-          padding: 6px 12px;
+          padding: 4px 10px;
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 6px;
         }
 
         .sv-cat-chevron {
@@ -440,10 +440,10 @@ export default function SemaineView({
           flex-shrink: 0;
         }
 
-        .sv-cat-icon { font-size: 13px; }
+        .sv-cat-icon { font-size: 12px; }
 
         .sv-cat-name {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           color: var(--color-neutral-600);
           text-transform: uppercase;
@@ -464,7 +464,7 @@ export default function SemaineView({
         /* ─── Employee row ─── */
         .sv-emp-row {
           display: grid;
-          min-height: 52px;
+          min-height: 40px;
           border-bottom: 1px solid var(--color-neutral-100);
           transition: background 0.1s;
         }
@@ -476,23 +476,23 @@ export default function SemaineView({
 
         /* Employee info cell */
         .sv-emp-cell {
-          padding: 6px 10px;
+          padding: 4px 8px;
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
           border-right: 1px solid var(--color-neutral-200);
         }
 
         .sv-emp-avatar {
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           color: white;
           display: flex;
           align-items: center;
           justify-content: center;
           font-weight: 700;
-          font-size: 11px;
+          font-size: 10px;
           flex-shrink: 0;
           letter-spacing: 0.02em;
           position: relative;
@@ -520,25 +520,27 @@ export default function SemaineView({
         }
 
         .sv-emp-name {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 600;
           color: var(--color-neutral-900);
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
           display: block;
+          line-height: 1.2;
         }
 
         .sv-emp-meta {
-          font-size: 10px;
+          font-size: 9px;
           color: var(--color-neutral-400);
+          line-height: 1.2;
         }
 
         /* ─── Day cell (timeline) ─── */
         .sv-day-cell {
           position: relative;
           border-right: 1px solid var(--color-neutral-100);
-          min-height: 52px;
+          min-height: 40px;
           cursor: pointer;
           transition: background 0.1s;
         }
@@ -601,9 +603,9 @@ export default function SemaineView({
         /* ─── Shift bars ─── */
         .sv-slot {
           position: absolute;
-          top: 5px;
-          bottom: 5px;
-          border-radius: 4px;
+          top: 3px;
+          bottom: 3px;
+          border-radius: 3px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -690,13 +692,13 @@ export default function SemaineView({
         }
 
         .sv-total-hours {
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 700;
           color: var(--color-neutral-900);
         }
 
         .sv-total-diff {
-          font-size: 10px;
+          font-size: 9px;
           font-weight: 500;
         }
 
@@ -712,11 +714,12 @@ export default function SemaineView({
         /* ─── Responsive ─── */
         @media (max-width: 1280px) {
           .sv-emp-avatar {
-            width: 28px;
-            height: 28px;
-            font-size: 10px;
+            width: 24px;
+            height: 24px;
+            font-size: 9px;
           }
           .sv-slot-time { font-size: 8px; }
+          .sv-emp-name { font-size: 10px; }
         }
 
         /* ─── Print ─── */
