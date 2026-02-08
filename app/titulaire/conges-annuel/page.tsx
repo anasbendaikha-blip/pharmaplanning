@@ -1,18 +1,30 @@
 /**
- * Page Calendrier Annuel des Conges
+ * Page Calendrier des Conges — 3 Vues
  *
- * Vue annuelle sur 12 mois avec barres de conges colorees par type.
- * Tous les employes visibles simultanement, filtres, stats et export PDF.
+ * Toggle entre vue Hebdomadaire, Mensuelle et Annuelle.
+ * Vue annuelle = calendrier mural 12 mois avec pastilles colorees.
+ * Vue mensuelle = grille grand format avec noms des absents.
+ * Vue hebdomadaire = detail semaine avec employes x jours.
  *
  * styled-jsx uniquement, CSS variables, pas de date-fns.
  */
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useOrganization } from '@/lib/supabase/client';
+import {
+  getMonday,
+  getWeekDates,
+  getWeekLabel,
+  addDays,
+  toISODateString,
+  getDayShortFr,
+} from '@/lib/utils/dateUtils';
 import Link from 'next/link';
 
 // ─── Types & constantes ───
+
+type ViewMode = 'week' | 'month' | 'year';
 
 interface AnnualLeave {
   id: string;
@@ -64,7 +76,7 @@ const LEAVE_COLORS: Record<string, { bg: string; text: string; bar: string }> = 
   autre: { bg: 'var(--color-secondary-50)', text: 'var(--color-secondary-700)', bar: 'var(--color-secondary-500)' },
 };
 
-const MONTHS_FR = [
+const MONTHS_FR_SHORT = [
   'Janv.', 'Fevr.', 'Mars', 'Avr.', 'Mai', 'Juin',
   'Juil.', 'Aout', 'Sept.', 'Oct.', 'Nov.', 'Dec.',
 ];
@@ -74,55 +86,41 @@ const MONTHS_FULL = [
   'Juillet', 'Aout', 'Septembre', 'Octobre', 'Novembre', 'Decembre',
 ];
 
+const DAY_LETTERS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
 // ─── Helpers ───
 
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
 
-function getEmployeeDisplayName(emp: AnnualEmployee): string {
+function getEmployeeDisplayName(emp: AnnualEmployee | AnnualLeave['employee']): string {
   if (emp.first_name || emp.last_name) {
     return `${emp.first_name || ''} ${emp.last_name || ''}`.trim();
   }
   return emp.name || 'Inconnu';
 }
 
-/** Compute bar position within a month cell (percentage offsets) */
-function computeBarPosition(
-  leave: AnnualLeave,
-  year: number,
-  monthIndex: number,
-): { left: number; width: number } | null {
-  const daysInMonth = getDaysInMonth(year, monthIndex);
-  const monthStart = new Date(year, monthIndex, 1);
-  const monthEnd = new Date(year, monthIndex, daysInMonth);
-
-  const leaveStart = new Date(leave.start_date + 'T12:00:00');
-  const leaveEnd = new Date(leave.end_date + 'T12:00:00');
-
-  // Check overlap
-  if (leaveEnd < monthStart || leaveStart > monthEnd) return null;
-
-  const effectiveStart = leaveStart < monthStart ? monthStart : leaveStart;
-  const effectiveEnd = leaveEnd > monthEnd ? monthEnd : leaveEnd;
-
-  const startDay = effectiveStart.getDate();
-  const endDay = effectiveEnd.getDate();
-
-  const left = ((startDay - 1) / daysInMonth) * 100;
-  const width = ((endDay - startDay + 1) / daysInMonth) * 100;
-
-  return { left, width: Math.max(width, 2) }; // min 2% visibility
+function makeDateStr(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 // ─── Composant ───
 
 export default function CongesAnnuelPage() {
   const { organizationId, isLoading: orgLoading } = useOrganization();
-  const printRef = useRef<HTMLDivElement>(null);
 
-  // Annee en cours
+  // Vue
+  const [viewMode, setViewMode] = useState<ViewMode>('year');
+
+  // Annee
   const [year, setYear] = useState(new Date().getFullYear());
+
+  // Navigation mois (vue mensuelle)
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+
+  // Navigation semaine (vue hebdomadaire)
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()));
 
   // Donnees
   const [leaves, setLeaves] = useState<AnnualLeave[]>([]);
@@ -135,8 +133,15 @@ export default function CongesAnnuelPage() {
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('approved');
 
-  // Tooltip
-  const [tooltip, setTooltip] = useState<{ leave: AnnualLeave; x: number; y: number } | null>(null);
+  // Popover jour
+  const [selectedDay, setSelectedDay] = useState<{
+    dateStr: string;
+    day: number;
+    month: number;
+    leaves: AnnualLeave[];
+    x: number;
+    y: number;
+  } | null>(null);
 
   // ─── Chargement ───
 
@@ -155,7 +160,6 @@ export default function CongesAnnuelPage() {
       if (filterStatus !== 'all') params.set('status', filterStatus);
 
       const res = await fetch(`/api/leaves/annual?${params.toString()}`);
-
       if (!res.ok) throw new Error('Erreur chargement');
 
       const data = await res.json();
@@ -173,12 +177,28 @@ export default function CongesAnnuelPage() {
     if (!orgLoading && organizationId) loadData();
   }, [orgLoading, organizationId, loadData]);
 
-  // ─── Donnees groupees par employe ───
+  // ─── Leaves par jour (Map<dateStr, AnnualLeave[]>) ───
+
+  const leavesPerDay = useMemo(() => {
+    const map = new Map<string, AnnualLeave[]>();
+    for (const leave of leaves) {
+      const start = new Date(leave.start_date + 'T12:00:00');
+      const end = new Date(leave.end_date + 'T12:00:00');
+      const d = new Date(start);
+      while (d <= end) {
+        const key = toISODateString(d);
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(leave);
+        d.setDate(d.getDate() + 1);
+      }
+    }
+    return map;
+  }, [leaves]);
+
+  // ─── Employes avec conges (pour stats) ───
 
   const employeesWithLeaves = useMemo(() => {
-    // Build map of employee leaves
     const empLeavesMap = new Map<string, AnnualLeave[]>();
-
     for (const leave of leaves) {
       if (!empLeavesMap.has(leave.employee_id)) {
         empLeavesMap.set(leave.employee_id, []);
@@ -186,21 +206,18 @@ export default function CongesAnnuelPage() {
       empLeavesMap.get(leave.employee_id)!.push(leave);
     }
 
-    // Build display list: employees with at least one leave, sorted by name
+    const employeesToShow = filterEmployee === 'all'
+      ? employees
+      : employees.filter(e => e.id === filterEmployee);
+
     const result: Array<{
       employee: AnnualEmployee;
       leaves: AnnualLeave[];
       totalDays: number;
     }> = [];
 
-    // Determine which employees to show
-    const employeesToShow = filterEmployee === 'all'
-      ? employees
-      : employees.filter(e => e.id === filterEmployee);
-
     for (const emp of employeesToShow) {
       const empLeaves = empLeavesMap.get(emp.id) || [];
-      // Show employee even if no leaves (for reference)
       result.push({
         employee: emp,
         leaves: empLeaves,
@@ -208,7 +225,6 @@ export default function CongesAnnuelPage() {
       });
     }
 
-    // Sort: employees with leaves first, then alphabetically
     result.sort((a, b) => {
       if (a.leaves.length > 0 && b.leaves.length === 0) return -1;
       if (a.leaves.length === 0 && b.leaves.length > 0) return 1;
@@ -218,39 +234,102 @@ export default function CongesAnnuelPage() {
     return result;
   }, [leaves, employees, filterEmployee]);
 
-  // ─── Navigation annee ───
+  // ─── Navigation ───
 
   const handlePrevYear = () => setYear(y => y - 1);
   const handleNextYear = () => setYear(y => y + 1);
   const handleCurrentYear = () => setYear(new Date().getFullYear());
 
-  // ─── Export PDF ───
-
-  const handlePrint = () => {
-    window.print();
+  const handlePrevMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setYear(y => y - 1);
+    } else {
+      setSelectedMonth(m => m - 1);
+    }
   };
 
-  // ─── Tooltip handlers ───
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setYear(y => y + 1);
+    } else {
+      setSelectedMonth(m => m + 1);
+    }
+  };
 
-  const handleBarHover = (leave: AnnualLeave, event: React.MouseEvent) => {
-    const rect = (event.target as HTMLElement).getBoundingClientRect();
-    setTooltip({
-      leave,
+  const handlePrevWeek = () => setWeekStart(w => addDays(w, -7));
+  const handleNextWeek = () => setWeekStart(w => addDays(w, 7));
+  const handleCurrentWeek = () => setWeekStart(getMonday(new Date()));
+
+  // ─── Popover handlers ───
+
+  const handleDayClick = (
+    dateStr: string,
+    day: number,
+    month: number,
+    dayLeaves: AnnualLeave[],
+    event: React.MouseEvent,
+  ) => {
+    if (dayLeaves.length === 0) return;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    setSelectedDay({
+      dateStr,
+      day,
+      month,
+      leaves: dayLeaves,
       x: rect.left + rect.width / 2,
-      y: rect.top - 8,
+      y: rect.bottom + 4,
     });
   };
 
-  const handleBarLeave = () => {
-    setTooltip(null);
-  };
+  useEffect(() => {
+    if (!selectedDay) return;
+    const handleClose = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.day-popover')) setSelectedDay(null);
+    };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedDay(null);
+    };
+    document.addEventListener('mousedown', handleClose);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handleClose);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [selectedDay]);
 
-  // ─── Mois le plus charge ───
+  // ─── Stats ───
 
   const busiestMonth = useMemo(() => {
     const maxIdx = stats.byMonth.indexOf(Math.max(...stats.byMonth));
     return stats.byMonth[maxIdx] > 0 ? MONTHS_FULL[maxIdx] : '-';
   }, [stats.byMonth]);
+
+  const handlePrint = () => window.print();
+
+  // ─── Week view data ───
+
+  const weekDates = useMemo(() => getWeekDates(weekStart), [weekStart]);
+  const weekDateStrs = useMemo(() => weekDates.map(d => toISODateString(d)), [weekDates]);
+
+  const weekEmployees = useMemo(() => {
+    // Get employees who have leaves during this week
+    const empIds = new Set<string>();
+    for (const dateStr of weekDateStrs) {
+      const dayLeaves = leavesPerDay.get(dateStr) || [];
+      for (const l of dayLeaves) empIds.add(l.employee_id);
+    }
+
+    const employeesToShow = filterEmployee === 'all'
+      ? employees.filter(e => empIds.has(e.id))
+      : employees.filter(e => e.id === filterEmployee && empIds.has(e.id));
+
+    return employeesToShow.sort((a, b) =>
+      getEmployeeDisplayName(a).localeCompare(getEmployeeDisplayName(b))
+    );
+  }, [weekDateStrs, leavesPerDay, employees, filterEmployee]);
 
   // ─── Rendu ───
 
@@ -259,7 +338,7 @@ export default function CongesAnnuelPage() {
       <>
         <div className="loading-page">
           <span className="loading-spinner" />
-          <span>Chargement du calendrier annuel...</span>
+          <span>Chargement du calendrier...</span>
         </div>
         <style jsx>{`
           .loading-page {
@@ -277,9 +356,273 @@ export default function CongesAnnuelPage() {
     );
   }
 
+  // ─── Rendu vue annuelle ───
+  const renderYearView = () => {
+    const today = new Date();
+
+    return (
+      <section className="calendar-section">
+        <div className="calendar-wall">
+          {Array.from({ length: 12 }, (_, monthIndex) => {
+            const daysInMonth = getDaysInMonth(year, monthIndex);
+            const firstDay = new Date(year, monthIndex, 1);
+            const firstDayCol = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+
+            return (
+              <div key={monthIndex} className="month-card">
+                <div className="month-card-header">
+                  <span className="month-card-title">{MONTHS_FULL[monthIndex]}</span>
+                  {stats.byMonth[monthIndex] > 0 && (
+                    <span className="month-card-badge">{stats.byMonth[monthIndex]}</span>
+                  )}
+                </div>
+
+                <div className="month-grid">
+                  {DAY_LETTERS.map((d, i) => (
+                    <div key={i} className={`day-header ${i >= 5 ? 'day-header--weekend' : ''}`}>{d}</div>
+                  ))}
+
+                  {Array.from({ length: firstDayCol }, (_, i) => (
+                    <div key={`e-${i}`} className="day-cell day-cell--empty" />
+                  ))}
+
+                  {Array.from({ length: daysInMonth }, (_, i) => {
+                    const day = i + 1;
+                    const dateStr = makeDateStr(year, monthIndex, day);
+                    const colIndex = (firstDayCol + i) % 7;
+                    const isWeekend = colIndex >= 5;
+                    const isTodayCell = year === today.getFullYear() && monthIndex === today.getMonth() && day === today.getDate();
+                    const dayLeaves = leavesPerDay.get(dateStr) || [];
+                    const maxDots = 4;
+                    const extraCount = dayLeaves.length > maxDots ? dayLeaves.length - maxDots : 0;
+
+                    return (
+                      <div
+                        key={day}
+                        className={[
+                          'day-cell',
+                          isWeekend ? 'day-cell--weekend' : '',
+                          isTodayCell ? 'day-cell--today' : '',
+                          dayLeaves.length > 0 ? 'day-cell--has-leaves' : '',
+                        ].filter(Boolean).join(' ')}
+                        onClick={(e) => handleDayClick(dateStr, day, monthIndex, dayLeaves, e)}
+                      >
+                        <span className="day-number">{day}</span>
+                        {dayLeaves.length > 0 && (
+                          <div className="day-dots">
+                            {dayLeaves.slice(0, maxDots).map((leave, li) => (
+                              <span
+                                key={li}
+                                className="day-dot"
+                                style={{ backgroundColor: (LEAVE_COLORS[leave.type] || LEAVE_COLORS.autre).bar }}
+                              />
+                            ))}
+                            {extraCount > 0 && (
+                              <span className="day-dot-extra">+{extraCount}</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  // ─── Rendu vue mensuelle ───
+  const renderMonthView = () => {
+    const today = new Date();
+    const daysInMonth = getDaysInMonth(year, selectedMonth);
+    const firstDay = new Date(year, selectedMonth, 1);
+    const firstDayCol = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+
+    return (
+      <section className="calendar-section">
+        {/* Navigation mois */}
+        <div className="sub-nav">
+          <button type="button" className="nav-btn" onClick={handlePrevMonth}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          <h3 className="sub-nav-title">{MONTHS_FULL[selectedMonth]} {year}</h3>
+          <button type="button" className="nav-btn" onClick={handleNextMonth}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+        </div>
+
+        <div className="month-large-grid">
+          {DAY_LETTERS.map((d, i) => (
+            <div key={i} className={`ml-day-header ${i >= 5 ? 'ml-day-header--weekend' : ''}`}>
+              {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'][i]}
+            </div>
+          ))}
+
+          {Array.from({ length: firstDayCol }, (_, i) => (
+            <div key={`e-${i}`} className="ml-cell ml-cell--empty" />
+          ))}
+
+          {Array.from({ length: daysInMonth }, (_, i) => {
+            const day = i + 1;
+            const dateStr = makeDateStr(year, selectedMonth, day);
+            const colIndex = (firstDayCol + i) % 7;
+            const isWeekend = colIndex >= 5;
+            const isTodayCell = year === today.getFullYear() && selectedMonth === today.getMonth() && day === today.getDate();
+            const dayLeaves = leavesPerDay.get(dateStr) || [];
+            const maxVisible = 3;
+            const extraCount = dayLeaves.length > maxVisible ? dayLeaves.length - maxVisible : 0;
+
+            return (
+              <div
+                key={day}
+                className={[
+                  'ml-cell',
+                  isWeekend ? 'ml-cell--weekend' : '',
+                  isTodayCell ? 'ml-cell--today' : '',
+                  dayLeaves.length > 0 ? 'ml-cell--has-leaves' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={(e) => handleDayClick(dateStr, day, selectedMonth, dayLeaves, e)}
+              >
+                <span className="ml-day-number">{day}</span>
+                {dayLeaves.length > 0 && (
+                  <div className="ml-leaves-list">
+                    {dayLeaves.slice(0, maxVisible).map((leave, li) => {
+                      const colors = LEAVE_COLORS[leave.type] || LEAVE_COLORS.autre;
+                      return (
+                        <div key={li} className="ml-leave-item">
+                          <span className="ml-leave-dot" style={{ backgroundColor: colors.bar }} />
+                          <span className="ml-leave-name">{getEmployeeDisplayName(leave.employee)}</span>
+                        </div>
+                      );
+                    })}
+                    {extraCount > 0 && (
+                      <span className="ml-leave-extra">+{extraCount} autre{extraCount > 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    );
+  };
+
+  // ─── Rendu vue hebdomadaire ───
+  const renderWeekView = () => {
+    const today = new Date();
+
+    return (
+      <section className="calendar-section">
+        {/* Navigation semaine */}
+        <div className="sub-nav">
+          <button type="button" className="nav-btn" onClick={handlePrevWeek}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          <div className="sub-nav-center">
+            <h3 className="sub-nav-title">{getWeekLabel(weekStart)}</h3>
+            <button type="button" className="today-btn-sm" onClick={handleCurrentWeek}>
+              Cette semaine
+            </button>
+          </div>
+          <button type="button" className="nav-btn" onClick={handleNextWeek}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+        </div>
+
+        <div className="week-grid">
+          {/* Header */}
+          <div className="wk-header-corner">Employe</div>
+          {weekDates.map((date, i) => {
+            const dateStr = weekDateStrs[i];
+            const isTodayCol = toISODateString(today) === dateStr;
+            const isWeekend = i >= 5;
+            const dayLeaves = leavesPerDay.get(dateStr) || [];
+            return (
+              <div
+                key={i}
+                className={[
+                  'wk-header-day',
+                  isTodayCol ? 'wk-header-day--today' : '',
+                  isWeekend ? 'wk-header-day--weekend' : '',
+                ].filter(Boolean).join(' ')}
+              >
+                <span className="wk-header-dayname">{getDayShortFr(date)}</span>
+                <span className="wk-header-date">{date.getDate()}/{date.getMonth() + 1}</span>
+                {dayLeaves.length > 0 && (
+                  <span className="wk-header-count">{dayLeaves.length}</span>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Rows par employe */}
+          {weekEmployees.length === 0 ? (
+            <div className="wk-empty">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-300)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <p>Aucune absence cette semaine</p>
+            </div>
+          ) : (
+            weekEmployees.map(emp => (
+              <React.Fragment key={emp.id}>
+                <div className="wk-cell-emp">
+                  <span className="wk-emp-name">{getEmployeeDisplayName(emp)}</span>
+                  <span className="wk-emp-role">{emp.role}</span>
+                </div>
+                {weekDateStrs.map((dateStr, i) => {
+                  const dayLeaves = (leavesPerDay.get(dateStr) || []).filter(l => l.employee_id === emp.id);
+                  const isWeekend = i >= 5;
+                  const isTodayCol = toISODateString(today) === dateStr;
+
+                  return (
+                    <div
+                      key={dateStr}
+                      className={[
+                        'wk-cell',
+                        isWeekend ? 'wk-cell--weekend' : '',
+                        isTodayCol ? 'wk-cell--today' : '',
+                        dayLeaves.length > 0 ? 'wk-cell--active' : '',
+                      ].filter(Boolean).join(' ')}
+                      onClick={(e) => {
+                        if (dayLeaves.length > 0) {
+                          const d = new Date(dateStr + 'T12:00:00');
+                          handleDayClick(dateStr, d.getDate(), d.getMonth(), dayLeaves, e);
+                        }
+                      }}
+                    >
+                      {dayLeaves.map((leave, li) => {
+                        const colors = LEAVE_COLORS[leave.type] || LEAVE_COLORS.autre;
+                        return (
+                          <div
+                            key={li}
+                            className="wk-leave-bar"
+                            style={{ backgroundColor: colors.bar }}
+                            title={LEAVE_TYPES[leave.type] || leave.type}
+                          >
+                            <span className="wk-leave-label">{LEAVE_TYPES[leave.type] || leave.type}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))
+          )}
+        </div>
+      </section>
+    );
+  };
+
   return (
     <>
-      <div className="annual-page" ref={printRef}>
+      <div className="annual-page">
         {/* ─── Header ─── */}
         <section className="page-header">
           <div className="header-left">
@@ -289,8 +632,8 @@ export default function CongesAnnuelPage() {
               </svg>
               Tableau de bord
             </Link>
-            <h1 className="page-title">Calendrier Annuel des Conges</h1>
-            <p className="page-subtitle">Vue d&#39;ensemble de toutes les absences sur l&#39;annee {year}</p>
+            <h1 className="page-title">Calendrier des Conges</h1>
+            <p className="page-subtitle">Vue d&#39;ensemble des absences — {year}</p>
           </div>
           <div className="header-actions">
             <button type="button" className="btn-outline" onClick={handlePrint}>
@@ -300,13 +643,6 @@ export default function CongesAnnuelPage() {
               </svg>
               Exporter PDF
             </button>
-            <Link href="/calendrier-conges" className="btn-secondary-link">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-                <line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-              Vue mensuelle
-            </Link>
           </div>
         </section>
 
@@ -352,44 +688,25 @@ export default function CongesAnnuelPage() {
         <section className="filters-section">
           <div className="filter-group">
             <label htmlFor="filter-employee" className="filter-label">Employe</label>
-            <select
-              id="filter-employee"
-              className="filter-select"
-              value={filterEmployee}
-              onChange={(e) => setFilterEmployee(e.target.value)}
-            >
+            <select id="filter-employee" className="filter-select" value={filterEmployee} onChange={(e) => setFilterEmployee(e.target.value)}>
               <option value="all">Tous les employes</option>
               {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>
-                  {getEmployeeDisplayName(emp)}
-                </option>
+                <option key={emp.id} value={emp.id}>{getEmployeeDisplayName(emp)}</option>
               ))}
             </select>
           </div>
-
           <div className="filter-group">
             <label htmlFor="filter-type" className="filter-label">Type</label>
-            <select
-              id="filter-type"
-              className="filter-select"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
+            <select id="filter-type" className="filter-select" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
               <option value="all">Tous les types</option>
               {Object.entries(LEAVE_TYPES).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </div>
-
           <div className="filter-group">
             <label htmlFor="filter-status" className="filter-label">Statut</label>
-            <select
-              id="filter-status"
-              className="filter-select"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
+            <select id="filter-status" className="filter-select" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
               <option value="all">Tous les statuts</option>
               <option value="approved">Approuve</option>
               <option value="pending">En attente</option>
@@ -398,90 +715,64 @@ export default function CongesAnnuelPage() {
           </div>
         </section>
 
+        {/* ─── Toggle de vue ─── */}
+        <section className="view-toggle">
+          <button
+            type="button"
+            className={`toggle-btn ${viewMode === 'week' ? 'toggle-btn--active' : ''}`}
+            onClick={() => setViewMode('week')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+            Semaine
+          </button>
+          <button
+            type="button"
+            className={`toggle-btn ${viewMode === 'month' ? 'toggle-btn--active' : ''}`}
+            onClick={() => setViewMode('month')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+            </svg>
+            Mois
+          </button>
+          <button
+            type="button"
+            className={`toggle-btn ${viewMode === 'year' ? 'toggle-btn--active' : ''}`}
+            onClick={() => setViewMode('year')}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5z"/>
+              <path d="M4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6z"/>
+              <path d="M16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z"/>
+            </svg>
+            Annee
+          </button>
+        </section>
+
         {/* ─── Legende ─── */}
         <section className="legend-section">
           {Object.entries(LEAVE_TYPES).map(([key, label]) => {
             const colors = LEAVE_COLORS[key];
             return (
               <div key={key} className="legend-item">
-                <span
-                  className="legend-color"
-                  style={{ backgroundColor: colors?.bar || 'var(--color-neutral-400)' }}
-                />
+                <span className="legend-color" style={{ backgroundColor: colors?.bar || 'var(--color-neutral-400)' }} />
                 <span className="legend-label">{label}</span>
-                {stats.byType[key] ? (
-                  <span className="legend-count">{stats.byType[key]}</span>
-                ) : null}
+                {stats.byType[key] ? <span className="legend-count">{stats.byType[key]}</span> : null}
               </div>
             );
           })}
         </section>
 
-        {/* ─── Grille calendrier ─── */}
-        <section className="calendar-section">
-          <div className="calendar-grid">
-            {/* Header: mois */}
-            <div className="grid-header">
-              <div className="grid-header-employee">Employe</div>
-              {MONTHS_FR.map((m, i) => (
-                <div key={i} className="grid-header-month">
-                  {m}
-                </div>
-              ))}
-              <div className="grid-header-total">Total</div>
-            </div>
+        {/* ─── Contenu conditionnel ─── */}
+        {viewMode === 'year' && renderYearView()}
+        {viewMode === 'month' && renderMonthView()}
+        {viewMode === 'week' && renderWeekView()}
 
-            {/* Body: lignes employes */}
-            {employeesWithLeaves.length === 0 ? (
-              <div className="empty-state">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-neutral-300)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/>
-                  <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                </svg>
-                <p className="empty-text">Aucun conge trouve pour {year}</p>
-              </div>
-            ) : (
-              employeesWithLeaves.map(({ employee, leaves: empLeaves, totalDays }) => (
-                <div key={employee.id} className="grid-row">
-                  <div className="grid-cell-employee" title={getEmployeeDisplayName(employee)}>
-                    <span className="emp-name">{getEmployeeDisplayName(employee)}</span>
-                    <span className="emp-role">{employee.role}</span>
-                  </div>
-
-                  {Array.from({ length: 12 }, (_, monthIndex) => (
-                    <div key={monthIndex} className="grid-cell-month">
-                      {empLeaves.map(leave => {
-                        const pos = computeBarPosition(leave, year, monthIndex);
-                        if (!pos) return null;
-                        const colors = LEAVE_COLORS[leave.type] || LEAVE_COLORS.autre;
-                        return (
-                          <div
-                            key={`${leave.id}-${monthIndex}`}
-                            className="leave-bar"
-                            style={{
-                              left: `${pos.left}%`,
-                              width: `${pos.width}%`,
-                              backgroundColor: colors.bar,
-                            }}
-                            onMouseEnter={(e) => handleBarHover(leave, e)}
-                            onMouseLeave={handleBarLeave}
-                            title={`${LEAVE_TYPES[leave.type] || leave.type}: ${leave.start_date} - ${leave.end_date}`}
-                          />
-                        );
-                      })}
-                    </div>
-                  ))}
-
-                  <div className="grid-cell-total">
-                    {totalDays > 0 ? `${totalDays}j` : '-'}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
-        {/* ─── Repartition par mois (mini chart) ─── */}
+        {/* ─── Repartition mensuelle ─── */}
         <section className="monthly-chart">
           <h3 className="section-title">Repartition mensuelle</h3>
           <div className="chart-bars">
@@ -491,12 +782,9 @@ export default function CongesAnnuelPage() {
               return (
                 <div key={i} className="chart-col">
                   <div className="chart-bar-wrapper">
-                    <div
-                      className="chart-bar"
-                      style={{ height: `${heightPct}%` }}
-                    />
+                    <div className="chart-bar" style={{ height: `${heightPct}%` }} />
                   </div>
-                  <span className="chart-label">{MONTHS_FR[i]}</span>
+                  <span className="chart-label">{MONTHS_FR_SHORT[i]}</span>
                   {count > 0 && <span className="chart-value">{count}</span>}
                 </div>
               );
@@ -525,13 +813,7 @@ export default function CongesAnnuelPage() {
                         <span className="type-pct">{percentage}%</span>
                       </div>
                       <div className="type-progress-track">
-                        <div
-                          className="type-progress-fill"
-                          style={{
-                            width: `${percentage}%`,
-                            backgroundColor: colors.bar,
-                          }}
-                        />
+                        <div className="type-progress-fill" style={{ width: `${percentage}%`, backgroundColor: colors.bar }} />
                       </div>
                     </div>
                   );
@@ -541,42 +823,54 @@ export default function CongesAnnuelPage() {
         )}
       </div>
 
-      {/* ─── Tooltip ─── */}
-      {tooltip && (
+      {/* ─── Popover detail jour ─── */}
+      {selectedDay && (
         <div
-          className="leave-tooltip"
-          style={{
-            left: `${tooltip.x}px`,
-            top: `${tooltip.y}px`,
-          }}
+          className="day-popover"
+          style={{ left: `${selectedDay.x}px`, top: `${selectedDay.y}px` }}
         >
-          <div className="tooltip-header">
-            <span className="tooltip-type">{LEAVE_TYPES[tooltip.leave.type] || tooltip.leave.type}</span>
-          </div>
-          <div className="tooltip-body">
-            <span>{tooltip.leave.employee.name}</span>
-            <span className="tooltip-dates">
-              {new Date(tooltip.leave.start_date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-              {' - '}
-              {new Date(tooltip.leave.end_date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+          <div className="popover-header">
+            <span className="popover-date">
+              {selectedDay.day} {MONTHS_FULL[selectedDay.month]} {year}
             </span>
-            <span className="tooltip-days">{tooltip.leave.business_days || 0} jour{(tooltip.leave.business_days || 0) !== 1 ? 's' : ''} ouvre{(tooltip.leave.business_days || 0) !== 1 ? 's' : ''}</span>
+            <span className="popover-count">
+              {selectedDay.leaves.length} absence{selectedDay.leaves.length !== 1 ? 's' : ''}
+            </span>
+            <button type="button" className="popover-close" onClick={() => setSelectedDay(null)}>
+              &times;
+            </button>
           </div>
-          {tooltip.leave.notes && (
-            <div className="tooltip-notes">{tooltip.leave.notes}</div>
-          )}
+          <div className="popover-body">
+            {selectedDay.leaves.map((leave, i) => {
+              const colors = LEAVE_COLORS[leave.type] || LEAVE_COLORS.autre;
+              return (
+                <div key={`${leave.id}-${i}`} className="popover-leave">
+                  <span className="popover-dot" style={{ backgroundColor: colors.bar }} />
+                  <div className="popover-leave-info">
+                    <span className="popover-emp-name">{getEmployeeDisplayName(leave.employee)}</span>
+                    <span className="popover-leave-type" style={{ color: colors.text }}>
+                      {LEAVE_TYPES[leave.type] || leave.type}
+                    </span>
+                    <span className="popover-leave-dates">
+                      {new Date(leave.start_date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                      {' - '}
+                      {new Date(leave.end_date + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                      {' '}({leave.business_days || 0}j)
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
       <style jsx>{`
         /* ─── Page layout ─── */
-        .annual-page { display: flex; flex-direction: column; gap: var(--spacing-6); }
+        .annual-page { display: flex; flex-direction: column; gap: var(--spacing-5); }
 
         /* ─── Header ─── */
-        .page-header {
-          display: flex; align-items: flex-start; justify-content: space-between;
-          flex-wrap: wrap; gap: var(--spacing-3);
-        }
+        .page-header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--spacing-3); }
         .header-left { display: flex; flex-direction: column; gap: var(--spacing-1); }
         .header-left :global(.back-link) {
           display: inline-flex; align-items: center; gap: var(--spacing-1);
@@ -586,31 +880,21 @@ export default function CongesAnnuelPage() {
         .header-left :global(.back-link:hover) { color: var(--color-primary-700); }
         .page-title { font-size: var(--font-size-2xl); font-weight: var(--font-weight-bold); color: var(--color-neutral-900); margin: 0; }
         .page-subtitle { font-size: var(--font-size-sm); color: var(--color-neutral-500); margin: 0; }
-
         .header-actions { display: flex; gap: var(--spacing-2); flex-wrap: wrap; }
         .btn-outline {
           display: flex; align-items: center; gap: var(--spacing-2);
-          padding: var(--spacing-2) var(--spacing-4);
-          background: white; border: 1px solid var(--color-neutral-300);
-          border-radius: var(--radius-md); font-family: var(--font-family-primary);
-          font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold);
-          color: var(--color-neutral-700); cursor: pointer; transition: all 0.15s ease;
+          padding: var(--spacing-2) var(--spacing-4); background: white;
+          border: 1px solid var(--color-neutral-300); border-radius: var(--radius-md);
+          font-family: var(--font-family-primary); font-size: var(--font-size-sm);
+          font-weight: var(--font-weight-semibold); color: var(--color-neutral-700);
+          cursor: pointer; transition: all 0.15s ease;
         }
         .btn-outline:hover { background: var(--color-neutral-50); border-color: var(--color-neutral-400); }
-        .header-actions :global(.btn-secondary-link) {
-          display: flex; align-items: center; gap: var(--spacing-2);
-          padding: var(--spacing-2) var(--spacing-4);
-          background: var(--color-primary-600); border: 1px solid var(--color-primary-600);
-          border-radius: var(--radius-md); font-family: var(--font-family-primary);
-          font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold);
-          color: white; text-decoration: none; transition: all 0.15s ease;
-        }
-        .header-actions :global(.btn-secondary-link:hover) { background: var(--color-primary-700); }
 
         /* ─── Year nav ─── */
         .year-navigation {
           display: flex; align-items: center; justify-content: space-between;
-          padding: var(--spacing-4); background: white;
+          padding: var(--spacing-3) var(--spacing-4); background: white;
           border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
         .nav-btn {
@@ -635,8 +919,7 @@ export default function CongesAnnuelPage() {
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-4); }
         .stat-card {
           display: flex; flex-direction: column; align-items: center; gap: var(--spacing-1);
-          padding: var(--spacing-4); background: white; border: 1px solid var(--color-neutral-200);
-          border-radius: var(--radius-lg);
+          padding: var(--spacing-4); background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
         .stat-value { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-primary-600); }
         .stat-value--accent { font-size: var(--font-size-base); color: var(--color-warning-600); }
@@ -644,267 +927,358 @@ export default function CongesAnnuelPage() {
 
         /* ─── Filters ─── */
         .filters-section {
-          display: flex; gap: var(--spacing-4); flex-wrap: wrap;
-          padding: var(--spacing-4); background: white;
-          border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
+          display: flex; gap: var(--spacing-4); flex-wrap: wrap; padding: var(--spacing-4);
+          background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
-        .filter-group { display: flex; flex-direction: column; gap: var(--spacing-1); flex: 1; min-width: 180px; }
-        .filter-label {
-          font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold);
-          color: var(--color-neutral-600); text-transform: uppercase; letter-spacing: 0.03em;
-        }
+        .filter-group { display: flex; flex-direction: column; gap: var(--spacing-1); flex: 1; min-width: 160px; }
+        .filter-label { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-neutral-600); text-transform: uppercase; letter-spacing: 0.03em; }
         .filter-select {
           padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--color-neutral-300);
           border-radius: var(--radius-md); font-family: var(--font-family-primary);
           font-size: var(--font-size-sm); color: var(--color-neutral-700);
-          background: white; transition: border-color 0.15s ease; cursor: pointer;
+          background: white; cursor: pointer; transition: border-color 0.15s ease;
         }
         .filter-select:focus { outline: none; border-color: var(--color-primary-500); box-shadow: 0 0 0 2px var(--color-primary-100); }
+
+        /* ─── View toggle ─── */
+        .view-toggle { display: flex; gap: var(--spacing-2); }
+        .toggle-btn {
+          display: flex; align-items: center; gap: var(--spacing-2);
+          padding: var(--spacing-2) var(--spacing-4); background: white;
+          border: 1px solid var(--color-neutral-200); border-radius: var(--radius-md);
+          font-family: var(--font-family-primary); font-size: var(--font-size-sm);
+          font-weight: var(--font-weight-medium); color: var(--color-neutral-600);
+          cursor: pointer; transition: all 0.15s ease;
+        }
+        .toggle-btn:hover { border-color: var(--color-neutral-300); background: var(--color-neutral-50); }
+        .toggle-btn--active { background: var(--color-primary-600); border-color: var(--color-primary-600); color: white; }
+        .toggle-btn--active:hover { background: var(--color-primary-700); }
 
         /* ─── Legend ─── */
         .legend-section {
           display: flex; flex-wrap: wrap; gap: var(--spacing-4);
           padding: var(--spacing-3) var(--spacing-4);
-          background: white; border: 1px solid var(--color-neutral-200);
-          border-radius: var(--radius-lg);
+          background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
         .legend-item { display: flex; align-items: center; gap: var(--spacing-2); }
-        .legend-color { width: 14px; height: 14px; border-radius: var(--radius-sm); flex-shrink: 0; }
+        .legend-color { width: 12px; height: 12px; border-radius: var(--radius-sm); flex-shrink: 0; }
         .legend-label { font-size: var(--font-size-xs); color: var(--color-neutral-600); font-weight: var(--font-weight-medium); }
         .legend-count {
           display: inline-flex; align-items: center; justify-content: center;
-          min-width: 20px; height: 18px; padding: 0 4px;
+          min-width: 18px; height: 18px; padding: 0 4px;
           background: var(--color-neutral-100); border-radius: var(--radius-full);
           font-size: 11px; font-weight: var(--font-weight-bold); color: var(--color-neutral-600);
         }
 
-        /* ─── Calendar grid ─── */
+        /* ─── Sub navigation (month/week) ─── */
+        .sub-nav {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: var(--spacing-3) var(--spacing-4);
+          border-bottom: 1px solid var(--color-neutral-200);
+        }
+        .sub-nav-center { display: flex; align-items: center; gap: var(--spacing-3); }
+        .sub-nav-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); margin: 0; }
+        .today-btn-sm {
+          padding: 2px var(--spacing-2); background: var(--color-primary-50);
+          border: 1px solid var(--color-primary-200); border-radius: var(--radius-sm);
+          font-family: var(--font-family-primary); font-size: 11px;
+          font-weight: var(--font-weight-semibold); color: var(--color-primary-700);
+          cursor: pointer; transition: all 0.15s ease;
+        }
+        .today-btn-sm:hover { background: var(--color-primary-100); }
+
+        /* ─── Calendar section (shared) ─── */
         .calendar-section {
           background: white; border: 1px solid var(--color-neutral-200);
           border-radius: var(--radius-lg); overflow: hidden;
         }
-        .calendar-grid { overflow-x: auto; }
 
-        .grid-header {
-          display: grid; grid-template-columns: 180px repeat(12, 1fr) 60px;
-          border-bottom: 2px solid var(--color-neutral-200);
-          background: var(--color-neutral-50); position: sticky; top: 0; z-index: 1;
+        /* ════════════════════════════════════════════════
+           VUE ANNUELLE — Calendrier mural 12 mois
+           ════════════════════════════════════════════════ */
+        .calendar-wall {
+          display: grid; grid-template-columns: repeat(4, 1fr);
+          gap: 0; padding: 0;
         }
-        .grid-header-employee {
-          padding: var(--spacing-3) var(--spacing-4);
-          font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
-          color: var(--color-neutral-700); text-transform: uppercase; letter-spacing: 0.03em;
-          border-right: 1px solid var(--color-neutral-200);
-        }
-        .grid-header-month {
-          padding: var(--spacing-3) var(--spacing-2);
-          font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
-          color: var(--color-neutral-600); text-align: center;
+        .month-card {
+          padding: var(--spacing-3);
           border-right: 1px solid var(--color-neutral-100);
-        }
-        .grid-header-total {
-          padding: var(--spacing-3) var(--spacing-2);
-          font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
-          color: var(--color-neutral-700); text-align: center;
-        }
-
-        .grid-row {
-          display: grid; grid-template-columns: 180px repeat(12, 1fr) 60px;
           border-bottom: 1px solid var(--color-neutral-100);
-          transition: background-color 0.1s ease;
         }
-        .grid-row:hover { background-color: var(--color-neutral-50); }
-        .grid-row:last-child { border-bottom: none; }
+        .month-card:nth-child(4n) { border-right: none; }
+        .month-card:nth-child(n+9) { border-bottom: none; }
 
-        .grid-cell-employee {
-          display: flex; flex-direction: column; justify-content: center;
-          gap: 2px; padding: var(--spacing-2) var(--spacing-4);
-          border-right: 1px solid var(--color-neutral-200);
-          min-height: 44px; overflow: hidden;
+        .month-card-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: var(--spacing-2); padding-bottom: var(--spacing-1);
+          border-bottom: 1px solid var(--color-neutral-100);
         }
-        .emp-name {
-          font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold);
-          color: var(--color-neutral-800); white-space: nowrap; overflow: hidden;
-          text-overflow: ellipsis;
+        .month-card-title { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); }
+        .month-card-badge {
+          display: inline-flex; align-items: center; justify-content: center;
+          min-width: 20px; height: 20px; padding: 0 5px;
+          background: var(--color-primary-100); color: var(--color-primary-700);
+          border-radius: var(--radius-full); font-size: 11px; font-weight: var(--font-weight-bold);
         }
-        .emp-role {
-          font-size: 11px; color: var(--color-neutral-400);
+
+        .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+
+        .day-header {
+          text-align: center; font-size: 9px; font-weight: var(--font-weight-bold);
+          color: var(--color-neutral-400); padding: 2px 0 3px; text-transform: uppercase;
+        }
+        .day-header--weekend { color: var(--color-neutral-300); }
+
+        .day-cell {
+          display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+          min-height: 32px; padding: 1px; border-radius: 3px;
+          cursor: default; transition: background-color 0.1s ease;
+        }
+        .day-cell--empty { min-height: 0; }
+        .day-cell--weekend { background: var(--color-neutral-50); }
+        .day-cell--weekend .day-number { color: var(--color-neutral-400); }
+        .day-cell--today { background: var(--color-primary-50); outline: 1px solid var(--color-primary-300); outline-offset: -1px; }
+        .day-cell--today .day-number { color: var(--color-primary-700); font-weight: var(--font-weight-bold); }
+        .day-cell--has-leaves { cursor: pointer; }
+        .day-cell--has-leaves:hover { background: var(--color-neutral-100); }
+        .day-cell--today.day-cell--has-leaves:hover { background: var(--color-primary-100); }
+
+        .day-number { font-size: 10px; font-weight: var(--font-weight-medium); color: var(--color-neutral-600); line-height: 1; margin-bottom: 1px; }
+        .day-dots { display: flex; flex-wrap: wrap; gap: 1px; justify-content: center; }
+        .day-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+        .day-dot-extra { font-size: 7px; font-weight: var(--font-weight-bold); color: var(--color-neutral-500); line-height: 5px; }
+
+        /* ════════════════════════════════════════════════
+           VUE MENSUELLE — Un mois en grand
+           ════════════════════════════════════════════════ */
+        .month-large-grid {
+          display: grid; grid-template-columns: repeat(7, 1fr);
+          gap: 0;
+        }
+        .ml-day-header {
+          text-align: center; font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
+          color: var(--color-neutral-500); padding: var(--spacing-2);
+          border-bottom: 2px solid var(--color-neutral-200);
+          background: var(--color-neutral-50);
+        }
+        .ml-day-header--weekend { color: var(--color-neutral-400); background: var(--color-neutral-100); }
+
+        .ml-cell {
+          min-height: 90px; padding: var(--spacing-2);
+          border-right: 1px solid var(--color-neutral-100);
+          border-bottom: 1px solid var(--color-neutral-100);
+          cursor: default; transition: background-color 0.1s ease;
+          display: flex; flex-direction: column; gap: 2px;
+        }
+        .ml-cell:nth-child(7n + 7) { border-right: none; } /* last column no right border */
+        .ml-cell--empty { min-height: 40px; background: var(--color-neutral-50); }
+        .ml-cell--weekend { background: var(--color-neutral-50); }
+        .ml-cell--today { background: var(--color-primary-50); }
+        .ml-cell--has-leaves { cursor: pointer; }
+        .ml-cell--has-leaves:hover { background: var(--color-neutral-100); }
+        .ml-cell--today.ml-cell--has-leaves:hover { background: var(--color-primary-100); }
+
+        .ml-day-number {
+          font-size: var(--font-size-sm); font-weight: var(--font-weight-bold);
+          color: var(--color-neutral-700); margin-bottom: 2px;
+        }
+        .ml-cell--today .ml-day-number { color: var(--color-primary-700); }
+        .ml-cell--weekend .ml-day-number { color: var(--color-neutral-400); }
+
+        .ml-leaves-list { display: flex; flex-direction: column; gap: 2px; }
+        .ml-leave-item { display: flex; align-items: center; gap: 4px; overflow: hidden; }
+        .ml-leave-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+        .ml-leave-name {
+          font-size: 11px; color: var(--color-neutral-700); font-weight: var(--font-weight-medium);
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         }
+        .ml-leave-extra { font-size: 10px; color: var(--color-neutral-500); font-weight: var(--font-weight-semibold); }
 
-        .grid-cell-month {
-          position: relative; padding: var(--spacing-2) 2px;
+        /* ════════════════════════════════════════════════
+           VUE HEBDOMADAIRE — Semaine detaillee
+           ════════════════════════════════════════════════ */
+        .week-grid {
+          display: grid; grid-template-columns: 160px repeat(7, 1fr);
+          overflow-x: auto;
+        }
+        .wk-header-corner {
+          padding: var(--spacing-3); font-size: var(--font-size-xs);
+          font-weight: var(--font-weight-bold); color: var(--color-neutral-600);
+          text-transform: uppercase; letter-spacing: 0.03em;
+          border-right: 1px solid var(--color-neutral-200);
+          border-bottom: 2px solid var(--color-neutral-200);
+          background: var(--color-neutral-50);
+          display: flex; align-items: center;
+        }
+        .wk-header-day {
+          display: flex; flex-direction: column; align-items: center; gap: 2px;
+          padding: var(--spacing-2); border-bottom: 2px solid var(--color-neutral-200);
           border-right: 1px solid var(--color-neutral-100);
-          min-height: 44px; display: flex; flex-direction: column;
-          justify-content: center; gap: 2px;
+          background: var(--color-neutral-50);
+        }
+        .wk-header-day:last-child { border-right: none; }
+        .wk-header-day--today { background: var(--color-primary-50); border-bottom-color: var(--color-primary-500); }
+        .wk-header-day--weekend { background: var(--color-neutral-100); }
+        .wk-header-dayname { font-size: var(--font-size-xs); font-weight: var(--font-weight-bold); color: var(--color-neutral-700); }
+        .wk-header-date { font-size: 11px; color: var(--color-neutral-500); }
+        .wk-header-count {
+          display: inline-flex; align-items: center; justify-content: center;
+          min-width: 18px; height: 16px; padding: 0 4px;
+          background: var(--color-primary-100); color: var(--color-primary-700);
+          border-radius: var(--radius-full); font-size: 10px; font-weight: var(--font-weight-bold);
         }
 
-        .leave-bar {
-          position: absolute; height: 8px; border-radius: 4px;
-          top: 50%; transform: translateY(-50%);
-          cursor: pointer; transition: opacity 0.15s ease, height 0.15s ease;
-          opacity: 0.85; z-index: 1;
+        .wk-cell-emp {
+          display: flex; flex-direction: column; justify-content: center; gap: 1px;
+          padding: var(--spacing-2) var(--spacing-3);
+          border-right: 1px solid var(--color-neutral-200);
+          border-bottom: 1px solid var(--color-neutral-100);
+          min-height: 48px;
         }
-        .leave-bar:hover { opacity: 1; height: 12px; z-index: 2; }
+        .wk-emp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .wk-emp-role { font-size: 11px; color: var(--color-neutral-400); }
 
-        .grid-cell-total {
+        .wk-cell {
+          display: flex; flex-direction: column; align-items: stretch; justify-content: center;
+          gap: 2px; padding: var(--spacing-1);
+          border-right: 1px solid var(--color-neutral-100);
+          border-bottom: 1px solid var(--color-neutral-100);
+          min-height: 48px; transition: background-color 0.1s ease;
+        }
+        .wk-cell:last-child { border-right: none; }
+        .wk-cell--weekend { background: var(--color-neutral-50); }
+        .wk-cell--today { background: var(--color-primary-50); }
+        .wk-cell--active { cursor: pointer; }
+        .wk-cell--active:hover { background: var(--color-neutral-100); }
+        .wk-cell--today.wk-cell--active:hover { background: var(--color-primary-100); }
+
+        .wk-leave-bar {
+          padding: 2px 6px; border-radius: var(--radius-sm);
+          display: flex; align-items: center; opacity: 0.9;
+        }
+        .wk-leave-label { font-size: 10px; font-weight: var(--font-weight-semibold); color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .wk-empty {
+          grid-column: 1 / -1; display: flex; flex-direction: column;
+          align-items: center; gap: var(--spacing-3); padding: var(--spacing-8);
+          text-align: center; color: var(--color-neutral-500); font-size: var(--font-size-sm);
+        }
+        .wk-empty p { margin: 0; }
+
+        /* ─── Popover ─── */
+        .day-popover {
+          position: fixed; z-index: 1000; transform: translateX(-50%);
+          background: white; border: 1px solid var(--color-neutral-200);
+          border-radius: var(--radius-lg); box-shadow: var(--shadow-xl);
+          min-width: 240px; max-width: 320px; max-height: 300px; overflow-y: auto;
+        }
+        .popover-header {
+          display: flex; align-items: center; gap: var(--spacing-2);
+          padding: var(--spacing-3); border-bottom: 1px solid var(--color-neutral-100);
+          position: sticky; top: 0; background: white;
+        }
+        .popover-date { font-size: var(--font-size-sm); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); flex: 1; }
+        .popover-count { font-size: var(--font-size-xs); color: var(--color-neutral-500); white-space: nowrap; }
+        .popover-close {
           display: flex; align-items: center; justify-content: center;
-          font-size: var(--font-size-sm); font-weight: var(--font-weight-bold);
-          color: var(--color-primary-600);
+          width: 24px; height: 24px; background: transparent; border: none;
+          border-radius: var(--radius-sm); cursor: pointer; color: var(--color-neutral-400);
+          font-size: 16px; line-height: 1; transition: all 0.1s ease;
         }
-
-        .empty-state {
-          display: flex; flex-direction: column; align-items: center;
-          gap: var(--spacing-3); padding: var(--spacing-10);
-          text-align: center;
-        }
-        .empty-text { font-size: var(--font-size-sm); color: var(--color-neutral-500); margin: 0; }
+        .popover-close:hover { background: var(--color-neutral-100); color: var(--color-neutral-600); }
+        .popover-body { padding: var(--spacing-2) var(--spacing-3) var(--spacing-3); display: flex; flex-direction: column; gap: var(--spacing-2); }
+        .popover-leave { display: flex; align-items: flex-start; gap: var(--spacing-2); }
+        .popover-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; }
+        .popover-leave-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .popover-emp-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-800); }
+        .popover-leave-type { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); }
+        .popover-leave-dates { font-size: var(--font-size-xs); color: var(--color-neutral-400); }
 
         /* ─── Monthly chart ─── */
-        .monthly-chart {
-          background: white; border: 1px solid var(--color-neutral-200);
-          border-radius: var(--radius-lg); padding: var(--spacing-5);
-        }
-        .section-title {
-          font-size: var(--font-size-md); font-weight: var(--font-weight-bold);
-          color: var(--color-neutral-800); margin: 0 0 var(--spacing-4);
-        }
-        .chart-bars {
-          display: grid; grid-template-columns: repeat(12, 1fr);
-          gap: var(--spacing-2); align-items: end;
-        }
-        .chart-col {
-          display: flex; flex-direction: column; align-items: center;
-          gap: var(--spacing-1);
-        }
-        .chart-bar-wrapper {
-          width: 100%; height: 100px;
-          display: flex; align-items: flex-end; justify-content: center;
-        }
-        .chart-bar {
-          width: 70%; min-height: 2px;
-          background: var(--color-primary-400); border-radius: 3px 3px 0 0;
-          transition: height 0.3s ease;
-        }
-        .chart-label {
-          font-size: 10px; color: var(--color-neutral-500);
-          font-weight: var(--font-weight-medium); text-align: center;
-        }
-        .chart-value {
-          font-size: 11px; color: var(--color-primary-600);
-          font-weight: var(--font-weight-bold);
-        }
+        .monthly-chart { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: var(--spacing-5); }
+        .section-title { font-size: var(--font-size-md); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); margin: 0 0 var(--spacing-4); }
+        .chart-bars { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--spacing-2); align-items: end; }
+        .chart-col { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-1); }
+        .chart-bar-wrapper { width: 100%; height: 100px; display: flex; align-items: flex-end; justify-content: center; }
+        .chart-bar { width: 70%; min-height: 2px; background: var(--color-primary-400); border-radius: 3px 3px 0 0; transition: height 0.3s ease; }
+        .chart-label { font-size: 10px; color: var(--color-neutral-500); font-weight: var(--font-weight-medium); text-align: center; }
+        .chart-value { font-size: 11px; color: var(--color-primary-600); font-weight: var(--font-weight-bold); }
 
         /* ─── Type breakdown ─── */
-        .type-breakdown {
-          background: white; border: 1px solid var(--color-neutral-200);
-          border-radius: var(--radius-lg); padding: var(--spacing-5);
-        }
-        .type-grid {
-          display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-          gap: var(--spacing-3);
-        }
-        .type-card {
-          padding: var(--spacing-3); border: 1px solid var(--color-neutral-100);
-          border-radius: var(--radius-md); display: flex; flex-direction: column;
-          gap: var(--spacing-2);
-        }
+        .type-breakdown { background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg); padding: var(--spacing-5); }
+        .type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-3); }
+        .type-card { padding: var(--spacing-3); border: 1px solid var(--color-neutral-100); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: var(--spacing-2); }
         .type-header { display: flex; align-items: center; gap: var(--spacing-2); }
         .type-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
         .type-name { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); color: var(--color-neutral-700); }
         .type-stats { display: flex; justify-content: space-between; align-items: baseline; }
         .type-count { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); color: var(--color-neutral-800); }
         .type-pct { font-size: var(--font-size-xs); color: var(--color-neutral-500); }
-        .type-progress-track {
-          height: 4px; background: var(--color-neutral-100); border-radius: 2px;
-          overflow: hidden;
-        }
-        .type-progress-fill {
-          height: 100%; border-radius: 2px;
-          transition: width 0.3s ease;
-        }
+        .type-progress-track { height: 4px; background: var(--color-neutral-100); border-radius: 2px; overflow: hidden; }
+        .type-progress-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
 
-        /* ─── Tooltip ─── */
-        .leave-tooltip {
-          position: fixed; z-index: 1000;
-          transform: translate(-50%, -100%);
-          background: var(--color-neutral-900); color: white;
-          border-radius: var(--radius-md); padding: var(--spacing-3);
-          box-shadow: var(--shadow-lg); pointer-events: none;
-          min-width: 180px; max-width: 280px;
-        }
-        .tooltip-header {
-          margin-bottom: var(--spacing-2);
-        }
-        .tooltip-type {
-          font-size: var(--font-size-xs); font-weight: var(--font-weight-bold);
-          text-transform: uppercase; letter-spacing: 0.03em;
-          opacity: 0.8;
-        }
-        .tooltip-body {
-          display: flex; flex-direction: column; gap: 2px;
-          font-size: var(--font-size-sm);
-        }
-        .tooltip-dates { font-size: var(--font-size-xs); opacity: 0.7; }
-        .tooltip-days { font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); color: var(--color-primary-300); }
-        .tooltip-notes {
-          margin-top: var(--spacing-2); padding-top: var(--spacing-2);
-          border-top: 1px solid rgba(255,255,255,0.1);
-          font-size: var(--font-size-xs); font-style: italic; opacity: 0.6;
-        }
-
-        /* ─── Print styles ─── */
+        /* ─── Print ─── */
         @media print {
-          .page-header,
-          .filters-section,
-          .header-actions,
-          .nav-btn,
-          .today-btn { display: none !important; }
-
+          .page-header, .filters-section, .header-actions, .view-toggle,
+          .nav-btn, .today-btn, .sub-nav { display: none !important; }
           .annual-page { gap: var(--spacing-3); }
-          .stats-grid { break-inside: avoid; }
-          .calendar-section { break-inside: avoid; }
-          .monthly-chart { break-inside: avoid; }
-          .type-breakdown { break-inside: avoid; }
-          .leave-tooltip { display: none !important; }
-
-          .grid-row:hover { background-color: transparent; }
-          .leave-bar:hover { height: 8px; }
+          .stats-grid, .calendar-section, .monthly-chart, .type-breakdown { break-inside: avoid; }
+          .day-popover { display: none !important; }
+          .day-cell--has-leaves:hover, .ml-cell--has-leaves:hover, .wk-cell--active:hover { background: transparent; }
         }
 
         /* ─── Responsive ─── */
+        @media (max-width: 1200px) {
+          .calendar-wall { grid-template-columns: repeat(3, 1fr); }
+          .month-card:nth-child(3n) { border-right: none; }
+          .month-card:nth-child(4n) { border-right: 1px solid var(--color-neutral-100); }
+          .month-card:nth-child(n+10) { border-bottom: none; }
+          .month-card:nth-child(n+9) { border-bottom: 1px solid var(--color-neutral-100); }
+        }
+
         @media (max-width: 900px) {
           .page-header { flex-direction: column; }
           .stats-grid { grid-template-columns: repeat(2, 1fr); }
           .filters-section { flex-direction: column; }
           .filter-group { min-width: 0; }
-          .legend-section { gap: var(--spacing-3); }
+          .view-toggle { flex-wrap: wrap; }
           .chart-bars { grid-template-columns: repeat(6, 1fr); }
           .chart-bar-wrapper { height: 60px; }
           .type-grid { grid-template-columns: 1fr; }
 
-          .grid-header,
-          .grid-row {
-            grid-template-columns: 120px repeat(12, minmax(40px, 1fr)) 50px;
-          }
-          .grid-header-month { font-size: 10px; padding: var(--spacing-2) 1px; }
-          .grid-cell-employee { padding: var(--spacing-2); }
-          .emp-name { font-size: var(--font-size-xs); }
+          .calendar-wall { grid-template-columns: repeat(2, 1fr); }
+          .month-card { border-right: 1px solid var(--color-neutral-100) !important; border-bottom: 1px solid var(--color-neutral-100) !important; }
+          .month-card:nth-child(2n) { border-right: none !important; }
+          .month-card:nth-child(n+11) { border-bottom: none !important; }
+
+          .ml-day-header { font-size: 11px; padding: var(--spacing-1); }
+          .ml-cell { min-height: 70px; padding: var(--spacing-1); }
+          .ml-leave-name { font-size: 10px; }
+
+          .week-grid { grid-template-columns: 120px repeat(7, minmax(60px, 1fr)); }
+          .wk-emp-name { font-size: var(--font-size-xs); }
         }
 
         @media (max-width: 640px) {
           .header-actions { width: 100%; }
           .btn-outline { flex: 1; justify-content: center; }
-          .header-actions :global(.btn-secondary-link) { flex: 1; justify-content: center; }
 
-          .grid-header,
-          .grid-row {
-            grid-template-columns: 90px repeat(12, minmax(30px, 1fr)) 40px;
+          .calendar-wall { grid-template-columns: 1fr; }
+          .month-card { border-right: none !important; border-bottom: 1px solid var(--color-neutral-100) !important; }
+          .month-card:last-child { border-bottom: none !important; }
+
+          .ml-day-header { font-size: 10px; }
+          .ml-cell { min-height: 60px; }
+          .ml-leave-item { display: none; }
+          .ml-cell--has-leaves .ml-day-number::after {
+            content: ''; display: inline-block; width: 6px; height: 6px;
+            background: var(--color-primary-500); border-radius: 50%; margin-left: 4px; vertical-align: middle;
           }
-          .grid-header-month { font-size: 9px; }
-          .grid-cell-employee { padding: var(--spacing-1); }
-          .emp-name { font-size: 11px; }
-          .emp-role { display: none; }
+
+          .week-grid { grid-template-columns: 90px repeat(7, minmax(45px, 1fr)); }
+          .wk-emp-name { font-size: 11px; }
+          .wk-emp-role { display: none; }
+          .wk-leave-label { font-size: 8px; }
         }
       `}</style>
     </>
