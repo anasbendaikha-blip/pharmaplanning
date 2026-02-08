@@ -42,6 +42,16 @@ export type {
   ShiftTemplate,
 } from './planning';
 
+// Disponibilités (Planning V2)
+export type {
+  Disponibilite,
+  DispoType,
+  DispoStatus,
+  DispoAlert,
+  DispoStats,
+  DispoTimelineItem,
+} from './disponibilite';
+
 // Gardes
 export type {
   GardeDuty,

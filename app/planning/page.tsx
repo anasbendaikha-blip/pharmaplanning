@@ -21,7 +21,10 @@ import {
   updateShift as dbUpdateShift,
   deleteShift as dbDeleteShift,
 } from '@/lib/supabase/queries';
-import type { Shift, Conflict, WeeklyOpeningHours, Employee, EmployeeCategory } from '@/lib/types';
+import type { Shift, Conflict, WeeklyOpeningHours, Employee, EmployeeCategory, Disponibilite, DispoStats } from '@/lib/types';
+import { LEGEND_ITEMS } from '@/lib/planning-config';
+import { generateMockDisponibilites } from './data/mockDisponibilites';
+import { analyzeWeeklyDispos, getAlertCounts, sortAlertsByPriority } from '@/lib/planning-analytics';
 
 import WeekNavigation from './components/WeekNavigation';
 import JourView from './components/JourView';
@@ -51,15 +54,6 @@ type FilterType = 'all' | EmployeeCategory;
 
 /** Noms courts des jours */
 const DAY_TABS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
-
-/** Couleurs de légende BaggPlanning */
-const LEGEND_ITEMS = [
-  { color: '#6366f1', label: 'Pharmacien' },
-  { color: '#6366f1', label: 'Préparateur' },
-  { color: '#a78bfa', label: 'Étudiant' },
-  { color: '#f59e0b', label: 'Pause' },
-  { color: '#ef4444', label: 'Congé' },
-];
 
 /** État du modal d'édition */
 interface ModalState {
@@ -102,6 +96,12 @@ export default function PlanningPage() {
   // Nombre de jours affichés en mode papier (3, 5 ou 6)
   const [paperDaysCount, setPaperDaysCount] = useState(3);
 
+  // ─── V2 Toggles ───
+  const [showDispos, setShowDispos] = useState(true);
+  const [showZones, setShowZones] = useState(true);
+  const [showEmployeeColumn, setShowEmployeeColumn] = useState(true);
+  const [showDispoAlerts, setShowDispoAlerts] = useState(false);
+
   // Jour sélectionné (index 0-5 = Lun-Sam) pour la vue jour
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
     const dow = today.getDay();
@@ -124,23 +124,22 @@ export default function PlanningPage() {
     if (savedFilter) setFilter(savedFilter as FilterType);
     const savedHide = localStorage.getItem('planning_hide_empty');
     if (savedHide === 'true') setHideEmpty(true);
+    // V2 toggles
+    const savedDispos = localStorage.getItem('planning_show_dispos');
+    if (savedDispos === 'false') setShowDispos(false);
+    const savedZones = localStorage.getItem('planning_show_zones');
+    if (savedZones === 'false') setShowZones(false);
+    const savedEmpCol = localStorage.getItem('planning_show_emp_col');
+    if (savedEmpCol === 'false') setShowEmployeeColumn(false);
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem('planning_view_mode', viewMode);
-  }, [viewMode]);
-
-  useEffect(() => {
-    localStorage.setItem('planning_paper_days', String(paperDaysCount));
-  }, [paperDaysCount]);
-
-  useEffect(() => {
-    localStorage.setItem('planning_filter', filter);
-  }, [filter]);
-
-  useEffect(() => {
-    localStorage.setItem('planning_hide_empty', String(hideEmpty));
-  }, [hideEmpty]);
+  useEffect(() => { localStorage.setItem('planning_view_mode', viewMode); }, [viewMode]);
+  useEffect(() => { localStorage.setItem('planning_paper_days', String(paperDaysCount)); }, [paperDaysCount]);
+  useEffect(() => { localStorage.setItem('planning_filter', filter); }, [filter]);
+  useEffect(() => { localStorage.setItem('planning_hide_empty', String(hideEmpty)); }, [hideEmpty]);
+  useEffect(() => { localStorage.setItem('planning_show_dispos', String(showDispos)); }, [showDispos]);
+  useEffect(() => { localStorage.setItem('planning_show_zones', String(showZones)); }, [showZones]);
+  useEffect(() => { localStorage.setItem('planning_show_emp_col', String(showEmployeeColumn)); }, [showEmployeeColumn]);
 
   // Dates de la semaine courante (Lun-Dim, 7 dates)
   const weekDates = useMemo(() => {
@@ -170,6 +169,27 @@ export default function PlanningPage() {
       .finally(() => { if (!cancelled) setIsLoadingData(false); });
     return () => { cancelled = true; };
   }, [organizationId, orgLoading, weekDates]);
+
+  // ─── Disponibilités (V2 mock) ───
+  const disponibilites = useMemo<Disponibilite[]>(() => {
+    return generateMockDisponibilites(weekDates);
+  }, [weekDates]);
+
+  // ─── Analytics dispos ───
+  const dispoStats = useMemo<DispoStats | null>(() => {
+    if (!showDispos || employees.length === 0) return null;
+    return analyzeWeeklyDispos(disponibilites, shifts, employees, weekDates);
+  }, [showDispos, disponibilites, shifts, employees, weekDates]);
+
+  const alertCounts = useMemo(() => {
+    if (!dispoStats) return { unused: 0, partial: 0, noDispo: 0, total: 0 };
+    return getAlertCounts(dispoStats.alerts);
+  }, [dispoStats]);
+
+  const sortedAlerts = useMemo(() => {
+    if (!dispoStats) return [];
+    return sortAlertsByPriority(dispoStats.alerts);
+  }, [dispoStats]);
 
   const handleWeekChange = useCallback((newMonday: Date) => {
     setCurrentMonday(newMonday);
@@ -393,13 +413,58 @@ export default function PlanningPage() {
             </div>
           </div>
 
-          {/* Sub-header : stats + légende */}
+          {/* Sub-header : stats + V2 toggles + légende */}
           <div className="pl-subheader">
             <div className="pl-stats">
               <span className="pl-stat-pill">{stats.uniqueEmployees} présents</span>
               <span className="pl-stat-pill">{stats.totalSlots} créneaux</span>
               <span className="pl-stat-pill">{formatHours(stats.totalHours)} planifiées</span>
+              {showDispos && dispoStats && (
+                <span className="pl-stat-pill pl-stat-pill--dispo">
+                  {dispoStats.usage_rate}% dispos utilisées
+                </span>
+              )}
             </div>
+
+            {/* V2 Toggle buttons */}
+            {viewMode !== 'paper' && (
+              <div className="pl-v2-toggles">
+                <button
+                  className={`pl-mini-toggle ${showEmployeeColumn ? 'pl-mini-toggle--active' : ''}`}
+                  onClick={() => setShowEmployeeColumn(v => !v)}
+                  type="button"
+                  title={showEmployeeColumn ? 'Masquer colonne employés' : 'Afficher colonne employés'}
+                >
+                  👤
+                </button>
+                <button
+                  className={`pl-mini-toggle ${showZones ? 'pl-mini-toggle--active' : ''}`}
+                  onClick={() => setShowZones(v => !v)}
+                  type="button"
+                  title={showZones ? 'Masquer zones contextuelles' : 'Afficher zones (Ouverture/Garde)'}
+                >
+                  🟢
+                </button>
+                <button
+                  className={`pl-mini-toggle ${showDispos ? 'pl-mini-toggle--active' : ''}`}
+                  onClick={() => setShowDispos(v => !v)}
+                  type="button"
+                  title={showDispos ? 'Masquer disponibilités' : 'Afficher disponibilités'}
+                >
+                  📋
+                </button>
+                {showDispos && alertCounts.total > 0 && (
+                  <button
+                    className={`pl-alert-badge ${showDispoAlerts ? 'pl-alert-badge--active' : ''}`}
+                    onClick={() => setShowDispoAlerts(v => !v)}
+                    type="button"
+                    title={`${alertCounts.total} alertes de disponibilités`}
+                  >
+                    ⚠️ {alertCounts.total}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div className="pl-legend">
               {LEGEND_ITEMS.map(item => (
@@ -425,6 +490,53 @@ export default function PlanningPage() {
                   <span className="pl-day-tab-date">{formatDayNum(weekDates[i])}</span>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Dispo alerts panel */}
+          {showDispoAlerts && sortedAlerts.length > 0 && (
+            <div className="pl-dispo-alerts">
+              <div className="pl-dispo-alerts-header">
+                <span className="pl-dispo-alerts-title">
+                  ⚠️ Alertes Disponibilités ({alertCounts.total})
+                </span>
+                <div className="pl-dispo-alerts-pills">
+                  {alertCounts.unused > 0 && (
+                    <span className="pl-dispo-pill pl-dispo-pill--unused">{alertCounts.unused} non utilisées</span>
+                  )}
+                  {alertCounts.partial > 0 && (
+                    <span className="pl-dispo-pill pl-dispo-pill--partial">{alertCounts.partial} partielles</span>
+                  )}
+                  {alertCounts.noDispo > 0 && (
+                    <span className="pl-dispo-pill pl-dispo-pill--no">{alertCounts.noDispo} sans dispo</span>
+                  )}
+                </div>
+                <button
+                  className="pl-dispo-alerts-close"
+                  onClick={() => setShowDispoAlerts(false)}
+                  type="button"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="pl-dispo-alerts-list">
+                {sortedAlerts.slice(0, 10).map(alert => (
+                  <div
+                    key={alert.id}
+                    className={`pl-dispo-alert-item pl-dispo-alert-item--${alert.alert_type}`}
+                  >
+                    <span className="pl-dispo-alert-icon">
+                      {alert.alert_type === 'unused_dispo' ? '🟢' : alert.alert_type === 'partial_use' ? '🟡' : '⚪'}
+                    </span>
+                    <span className="pl-dispo-alert-msg">{alert.message}</span>
+                  </div>
+                ))}
+                {sortedAlerts.length > 10 && (
+                  <div className="pl-dispo-alert-more">
+                    +{sortedAlerts.length - 10} autres alertes
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -470,10 +582,14 @@ export default function PlanningPage() {
               employees={employees}
               shifts={shifts}
               conflicts={validationResult.conflicts}
+              disponibilites={disponibilites}
               weekDates={weekDates}
               todayStr={todayStr}
               filter={filter}
               hideEmpty={hideEmpty}
+              showDispos={showDispos}
+              showZones={showZones}
+              showEmployeeColumn={showEmployeeColumn}
               collapsedCats={collapsedCats}
               onToggleCategory={handleToggleCategory}
               onCellClick={handleCellClick}
@@ -485,9 +601,13 @@ export default function PlanningPage() {
               employees={employees}
               shifts={shifts}
               conflicts={validationResult.conflicts}
+              disponibilites={disponibilites}
               date={selectedDate}
               filter={filter}
               hideEmpty={hideEmpty}
+              showDispos={showDispos}
+              showZones={showZones}
+              showEmployeeColumn={showEmployeeColumn}
               collapsedCats={collapsedCats}
               onToggleCategory={handleToggleCategory}
               onCellClick={handleCellClick}
@@ -648,6 +768,7 @@ export default function PlanningPage() {
         .pl-stats {
           display: flex;
           gap: var(--spacing-2);
+          flex-wrap: wrap;
         }
 
         .pl-stat-pill {
@@ -657,6 +778,69 @@ export default function PlanningPage() {
           font-size: 11px;
           font-weight: var(--font-weight-semibold);
           color: var(--color-neutral-600);
+        }
+
+        .pl-stat-pill--dispo {
+          background: rgba(34, 197, 94, 0.1);
+          color: #16a34a;
+        }
+
+        /* V2 toggle buttons */
+        .pl-v2-toggles {
+          display: flex;
+          gap: 4px;
+          align-items: center;
+        }
+
+        .pl-mini-toggle {
+          width: 32px;
+          height: 28px;
+          border: 1px solid var(--color-neutral-300);
+          border-radius: var(--radius-sm);
+          background: white;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          transition: all 0.15s;
+          opacity: 0.5;
+        }
+
+        .pl-mini-toggle:hover {
+          background: var(--color-neutral-50);
+          opacity: 0.8;
+        }
+
+        .pl-mini-toggle--active {
+          opacity: 1;
+          background: var(--color-primary-50);
+          border-color: var(--color-primary-300);
+        }
+
+        .pl-alert-badge {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          padding: 3px 10px;
+          border: 1px solid var(--color-warning-300);
+          border-radius: var(--radius-full);
+          background: var(--color-warning-50);
+          cursor: pointer;
+          font-family: var(--font-family-primary);
+          font-size: 11px;
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-warning-700);
+          transition: all 0.15s;
+        }
+
+        .pl-alert-badge:hover {
+          background: var(--color-warning-100);
+        }
+
+        .pl-alert-badge--active {
+          background: var(--color-warning-100);
+          border-color: var(--color-warning-400);
         }
 
         .pl-legend {
@@ -739,6 +923,110 @@ export default function PlanningPage() {
 
         .pl-day-tab--active .pl-day-tab-date {
           color: var(--color-primary-700);
+        }
+
+        /* ═══ Dispo Alerts Panel ═══ */
+        .pl-dispo-alerts {
+          border: 1px solid var(--color-warning-200);
+          border-radius: var(--radius-md);
+          background: var(--color-warning-50);
+          margin: var(--spacing-1) 0;
+          overflow: hidden;
+        }
+
+        .pl-dispo-alerts-header {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-3);
+          padding: var(--spacing-2) var(--spacing-3);
+          border-bottom: 1px solid var(--color-warning-200);
+        }
+
+        .pl-dispo-alerts-title {
+          font-size: 12px;
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-warning-800);
+        }
+
+        .pl-dispo-alerts-pills {
+          display: flex;
+          gap: var(--spacing-2);
+          flex: 1;
+        }
+
+        .pl-dispo-pill {
+          padding: 1px 8px;
+          border-radius: var(--radius-full);
+          font-size: 10px;
+          font-weight: 600;
+        }
+
+        .pl-dispo-pill--unused {
+          background: rgba(34, 197, 94, 0.15);
+          color: #16a34a;
+        }
+
+        .pl-dispo-pill--partial {
+          background: rgba(245, 158, 11, 0.15);
+          color: #b45309;
+        }
+
+        .pl-dispo-pill--no {
+          background: rgba(148, 163, 184, 0.2);
+          color: #64748b;
+        }
+
+        .pl-dispo-alerts-close {
+          padding: 2px 6px;
+          border: none;
+          background: transparent;
+          cursor: pointer;
+          font-size: 14px;
+          color: var(--color-neutral-500);
+          border-radius: var(--radius-sm);
+          transition: background 0.1s;
+        }
+
+        .pl-dispo-alerts-close:hover {
+          background: var(--color-warning-100);
+        }
+
+        .pl-dispo-alerts-list {
+          padding: var(--spacing-2) var(--spacing-3);
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          max-height: 160px;
+          overflow-y: auto;
+        }
+
+        .pl-dispo-alert-item {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-2);
+          padding: 4px 8px;
+          border-radius: var(--radius-sm);
+          font-size: 12px;
+          color: var(--color-neutral-700);
+          background: white;
+        }
+
+        .pl-dispo-alert-icon {
+          font-size: 12px;
+          flex-shrink: 0;
+        }
+
+        .pl-dispo-alert-msg {
+          font-size: 11px;
+          line-height: 1.4;
+        }
+
+        .pl-dispo-alert-more {
+          text-align: center;
+          font-size: 11px;
+          color: var(--color-neutral-500);
+          padding: 4px;
+          font-weight: 500;
         }
 
         /* ═══ Content ═══ */

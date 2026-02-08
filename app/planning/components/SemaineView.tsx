@@ -1,49 +1,43 @@
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
-import type { Employee, Shift, Conflict, EmployeeCategory } from '@/lib/types';
+import type { Employee, Shift, Conflict, EmployeeCategory, Disponibilite } from '@/lib/types';
 import { formatHours } from '@/lib/utils/hourUtils';
 import { getDayShortFr, parseISODate } from '@/lib/utils/dateUtils';
+import {
+  TIMELINE_START,
+  TIMELINE_END,
+  TIMELINE_SPAN,
+  TIMELINE_TICKS_COMPACT,
+  PLANNING_ZONES,
+  COLORS,
+  CATEGORY_ORDER,
+  CATEGORY_CONFIG,
+  Z_LAYERS,
+  getSlotPosition,
+  getZonePosition,
+  formatTime,
+  getInitials,
+  getSlotColor,
+} from '@/lib/planning-config';
+import {
+  getDispoIndicator,
+  enrichDisposWithUsage,
+} from '@/lib/disponibilites-service';
 import ConflictBadge from './ConflictBadge';
-
-/** Ordre d'affichage des catégories */
-const CATEGORY_ORDER: EmployeeCategory[] = [
-  'pharmacien_titulaire',
-  'pharmacien_adjoint',
-  'preparateur',
-  'rayonniste',
-  'apprenti',
-  'etudiant',
-];
-
-/** Info catégories */
-const CATEGORY_INFO: Record<string, { label: string; color: string; icon: string }> = {
-  pharmacien_titulaire: { label: 'Pharmaciens Titulaires', color: '#2563eb', icon: '💊' },
-  pharmacien_adjoint: { label: 'Pharmaciens Adjoints', color: '#3b82f6', icon: '💊' },
-  preparateur: { label: 'Préparateurs', color: '#10b981', icon: '⚗️' },
-  rayonniste: { label: 'Rayonnistes', color: '#f59e0b', icon: '📦' },
-  apprenti: { label: 'Apprentis', color: '#8b5cf6', icon: '🎓' },
-  etudiant: { label: 'Étudiants', color: '#ec4899', icon: '📚' },
-};
-
-/** Couleurs uniformes BaggPlanning */
-const SLOT_COLOR = '#6366f1';
-const STUDENT_COLOR = '#a78bfa';
-
-/** Config timeline */
-const HOUR_START = 8;
-const HOUR_END = 21;
-const HOURS_SPAN = HOUR_END - HOUR_START;
-const TIMELINE_MARKS = [8, 12, 16, 20];
 
 interface SemaineViewProps {
   employees: Employee[];
   shifts: Shift[];
   conflicts: Conflict[];
+  disponibilites: Disponibilite[];
   weekDates: string[];
   todayStr: string;
   filter: 'all' | EmployeeCategory;
   hideEmpty: boolean;
+  showDispos: boolean;
+  showZones: boolean;
+  showEmployeeColumn: boolean;
   collapsedCats: Set<EmployeeCategory>;
   onToggleCategory: (cat: EmployeeCategory) => void;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
@@ -51,45 +45,18 @@ interface SemaineViewProps {
   onDayClick: (dayIndex: number) => void;
 }
 
-/** Obtient les initiales d'un employé */
-function getInitials(firstName: string, lastName: string): string {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
-
-/** Convertit "HH:MM" en nombre décimal d'heures */
-function timeToDecimal(time: string): number {
-  const [h, m] = time.split(':').map(Number);
-  return h + m / 60;
-}
-
-/** Formate "HH:MM" → "8h30" ou "8h" */
-function formatTime(time: string): string {
-  const [h, m] = time.split(':');
-  const hour = parseInt(h, 10);
-  const min = parseInt(m, 10);
-  return min === 0 ? `${hour}h` : `${hour}h${m}`;
-}
-
-/** Calcule la position d'un shift dans la timeline */
-function getSlotPosition(startTime: string, endTime: string): { left: number; width: number } {
-  const startDec = timeToDecimal(startTime);
-  const endDec = timeToDecimal(endTime);
-
-  const left = ((Math.max(startDec, HOUR_START) - HOUR_START) / HOURS_SPAN) * 100;
-  const right = ((Math.min(endDec, HOUR_END) - HOUR_START) / HOURS_SPAN) * 100;
-  const width = Math.max(right - left, 2);
-
-  return { left, width };
-}
-
 export default function SemaineView({
   employees,
   shifts,
   conflicts,
+  disponibilites,
   weekDates,
   todayStr,
   filter,
   hideEmpty,
+  showDispos,
+  showZones,
+  showEmployeeColumn,
   collapsedCats,
   onToggleCategory,
   onCellClick,
@@ -159,14 +126,21 @@ export default function SemaineView({
     });
   }, [workDays, shiftIndex]);
 
+  // Grid columns
+  const empColWidth = showEmployeeColumn ? '190px' : '0px';
+  const headerGridCols = showEmployeeColumn
+    ? '190px repeat(6, 1fr) 90px'
+    : 'repeat(6, 1fr) 90px';
+  const rowGridCols = headerGridCols;
+
   return (
     <>
       <div className="sv-container">
         <div className="sv-scroll">
           <div className="sv-grid">
             {/* ═══ Header ═══ */}
-            <div className="sv-header">
-              <div className="sv-header-emp">EMPLOYÉ</div>
+            <div className="sv-header" style={{ gridTemplateColumns: headerGridCols }}>
+              {showEmployeeColumn && <div className="sv-header-emp">EMPLOYÉ</div>}
               {workDays.map((dateStr, dayIdx) => {
                 const date = parseISODate(dateStr);
                 const isToday = dateStr === todayStr;
@@ -179,7 +153,7 @@ export default function SemaineView({
                     <div className="sv-day-name">{getDayShortFr(date)}</div>
                     <div className="sv-day-num">{date.getDate()}</div>
                     <div className="sv-timeline-marks">
-                      {TIMELINE_MARKS.map(h => (
+                      {TIMELINE_TICKS_COMPACT.map(h => (
                         <span key={h} className="sv-hour-mark">{h}h</span>
                       ))}
                     </div>
@@ -192,7 +166,7 @@ export default function SemaineView({
             {/* ═══ Body ═══ */}
             <div className="sv-body">
               {Array.from(employeesByCategory.entries()).map(([category, catEmps]) => {
-                const info = CATEGORY_INFO[category];
+                const config = CATEGORY_CONFIG[category];
                 const isCollapsed = collapsedCats.has(category);
 
                 const visibleEmps = hideEmpty
@@ -210,9 +184,9 @@ export default function SemaineView({
                     >
                       <div className="sv-cat-title">
                         <span className="sv-cat-chevron">{isCollapsed ? '\u25B6' : '\u25BC'}</span>
-                        <span className="sv-cat-dot" style={{ backgroundColor: info.color }} />
-                        <span className="sv-cat-icon">{info.icon}</span>
-                        <span className="sv-cat-name">{info.label}</span>
+                        <span className="sv-cat-dot" style={{ backgroundColor: config.color }} />
+                        <span className="sv-cat-icon">{config.icon}</span>
+                        <span className="sv-cat-name">{config.label}</span>
                         <span className="sv-cat-count">
                           {hideEmpty ? `${visibleEmps.length}/${catEmps.length}` : catEmps.length}
                         </span>
@@ -228,7 +202,12 @@ export default function SemaineView({
                         shiftIndex={shiftIndex}
                         conflictIndex={conflictIndex}
                         weeklyShifts={shiftsByEmployee.get(emp.id) || []}
+                        disponibilites={disponibilites}
                         todayStr={todayStr}
+                        showDispos={showDispos}
+                        showZones={showZones}
+                        showEmployeeColumn={showEmployeeColumn}
+                        gridCols={rowGridCols}
                         onCellClick={onCellClick}
                         onShiftDrop={onShiftDrop}
                         onDayClick={onDayClick}
@@ -244,7 +223,7 @@ export default function SemaineView({
 
       <style jsx global>{`
         /* ═══════════════════════════════════════════════ */
-        /* SemaineView — BaggPlanning-style week grid     */
+        /* SemaineView V2 — BaggPlanning-style week grid  */
         /* ═══════════════════════════════════════════════ */
 
         .sv-container {
@@ -260,16 +239,15 @@ export default function SemaineView({
         }
 
         .sv-grid {
-          min-width: 1200px;
+          min-width: 1000px;
         }
 
         /* ─── Header ─── */
         .sv-header {
           display: grid;
-          grid-template-columns: 190px repeat(6, 1fr) 90px;
           position: sticky;
           top: 0;
-          z-index: 10;
+          z-index: ${Z_LAYERS.stickyHeader};
           border-bottom: 2px solid var(--color-neutral-300);
           background: var(--color-neutral-50);
         }
@@ -294,17 +272,9 @@ export default function SemaineView({
           transition: background 0.1s;
         }
 
-        .sv-header-day:hover {
-          background: var(--color-neutral-100);
-        }
-
-        .sv-header-day--today {
-          background: var(--color-primary-50);
-        }
-
-        .sv-header-day--today:hover {
-          background: var(--color-primary-100);
-        }
+        .sv-header-day:hover { background: var(--color-neutral-100); }
+        .sv-header-day--today { background: var(--color-primary-50); }
+        .sv-header-day--today:hover { background: var(--color-primary-100); }
 
         .sv-day-name {
           font-size: 12px;
@@ -365,9 +335,7 @@ export default function SemaineView({
           transition: background 0.1s;
         }
 
-        .sv-cat-header:hover {
-          background: var(--color-neutral-200);
-        }
+        .sv-cat-header:hover { background: var(--color-neutral-200); }
 
         .sv-cat-title {
           padding: 6px 12px;
@@ -391,9 +359,7 @@ export default function SemaineView({
           flex-shrink: 0;
         }
 
-        .sv-cat-icon {
-          font-size: 13px;
-        }
+        .sv-cat-icon { font-size: 13px; }
 
         .sv-cat-name {
           font-size: 12px;
@@ -417,23 +383,15 @@ export default function SemaineView({
         /* ─── Employee row ─── */
         .sv-emp-row {
           display: grid;
-          grid-template-columns: 190px repeat(6, 1fr) 90px;
           min-height: 52px;
           border-bottom: 1px solid var(--color-neutral-100);
           transition: background 0.1s;
         }
 
-        .sv-emp-row:hover {
-          background: var(--color-neutral-50);
-        }
-
-        .sv-emp-row--conflict {
-          background: var(--color-danger-50);
-        }
-
-        .sv-emp-row--conflict:hover {
-          background: var(--color-danger-100);
-        }
+        .sv-emp-row:hover { background: var(--color-neutral-50); }
+        .sv-emp-row--conflict { background: var(--color-danger-50); }
+        .sv-emp-row--conflict:hover { background: var(--color-danger-100); }
+        .sv-emp-row--no-dispo { opacity: 0.5; }
 
         /* Employee info cell */
         .sv-emp-cell {
@@ -456,7 +414,24 @@ export default function SemaineView({
           font-size: 11px;
           flex-shrink: 0;
           letter-spacing: 0.02em;
+          position: relative;
         }
+
+        .sv-dispo-badge {
+          position: absolute;
+          bottom: -2px;
+          right: -2px;
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          border: 2px solid white;
+        }
+
+        .sv-dispo-badge--full { background: #22c55e; }
+        .sv-dispo-badge--partial { background: #f59e0b; }
+        .sv-dispo-badge--preferred { background: #3b82f6; }
+        .sv-dispo-badge--unavailable { background: #ef4444; }
+        .sv-dispo-badge--none { background: #94a3b8; }
 
         .sv-emp-info {
           min-width: 0;
@@ -487,18 +462,41 @@ export default function SemaineView({
           transition: background 0.1s;
         }
 
-        .sv-day-cell:hover {
-          background: var(--color-primary-50);
-        }
-
-        .sv-day-cell--today {
-          background: rgba(59, 130, 246, 0.03);
-        }
-
+        .sv-day-cell:hover { background: var(--color-primary-50); }
+        .sv-day-cell--today { background: rgba(59, 130, 246, 0.03); }
         .sv-day-cell--dragover {
           background: var(--color-secondary-50);
           outline: 2px dashed var(--color-secondary-400);
           outline-offset: -2px;
+        }
+
+        /* Zone bg in day cell */
+        .sv-zone-bg {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          z-index: ${Z_LAYERS.zones};
+          pointer-events: none;
+        }
+
+        /* Dispo layer in day cell */
+        .sv-dispo-bar {
+          position: absolute;
+          top: 3px;
+          bottom: 3px;
+          border-radius: 3px;
+          z-index: ${Z_LAYERS.disponibilites};
+          pointer-events: none;
+        }
+
+        .sv-dispo-bar--available {
+          background: ${COLORS.dispoAvailable};
+          border: 1px solid ${COLORS.dispoBorder};
+        }
+
+        .sv-dispo-bar--preferred {
+          background: ${COLORS.dispoPreferred};
+          border: 1px solid rgba(59, 130, 246, 0.3);
         }
 
         /* Grid lines */
@@ -507,6 +505,7 @@ export default function SemaineView({
           inset: 0;
           display: flex;
           pointer-events: none;
+          z-index: ${Z_LAYERS.gridlines};
         }
 
         .sv-grid-line {
@@ -531,7 +530,7 @@ export default function SemaineView({
           font-weight: 700;
           color: white;
           cursor: grab;
-          z-index: 2;
+          z-index: ${Z_LAYERS.work};
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
           transition: transform 0.1s, box-shadow 0.1s;
           overflow: hidden;
@@ -541,12 +540,10 @@ export default function SemaineView({
         .sv-slot:hover {
           transform: translateY(-1px);
           box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
-          z-index: 3;
+          z-index: ${Z_LAYERS.work + 1};
         }
 
-        .sv-slot:active {
-          cursor: grabbing;
-        }
+        .sv-slot:active { cursor: grabbing; }
 
         .sv-slot-time {
           white-space: nowrap;
@@ -561,16 +558,12 @@ export default function SemaineView({
           font-size: 10px;
           cursor: default;
           background: repeating-linear-gradient(
-            45deg,
-            #fee2e2,
-            #fee2e2 4px,
-            #fecaca 4px,
-            #fecaca 8px
+            45deg, #fee2e2, #fee2e2 4px, #fecaca 4px, #fecaca 8px
           ) !important;
           color: #991b1b;
           border: 1px dashed #ef4444;
           font-weight: 600;
-          z-index: 5;
+          z-index: ${Z_LAYERS.conges};
         }
 
         .sv-slot--special {
@@ -579,7 +572,7 @@ export default function SemaineView({
           width: auto !important;
           font-size: 10px;
           cursor: default;
-          z-index: 5;
+          z-index: ${Z_LAYERS.conges};
           font-weight: 600;
         }
 
@@ -590,7 +583,7 @@ export default function SemaineView({
           right: 2px;
           display: flex;
           gap: 1px;
-          z-index: 6;
+          z-index: ${Z_LAYERS.conflicts};
         }
 
         /* ─── Total cell ─── */
@@ -615,17 +608,9 @@ export default function SemaineView({
           font-weight: 500;
         }
 
-        .sv-total-diff--over {
-          color: var(--color-warning-600);
-        }
-
-        .sv-total-diff--under {
-          color: var(--color-secondary-600);
-        }
-
-        .sv-total-diff--ok {
-          color: var(--color-neutral-400);
-        }
+        .sv-total-diff--over { color: var(--color-warning-600); }
+        .sv-total-diff--under { color: var(--color-secondary-600); }
+        .sv-total-diff--ok { color: var(--color-neutral-400); }
 
         .sv-total-contract {
           font-size: 9px;
@@ -634,51 +619,21 @@ export default function SemaineView({
 
         /* ─── Responsive ─── */
         @media (max-width: 1280px) {
-          .sv-grid {
-            min-width: 1000px;
-          }
-
-          .sv-header,
-          .sv-emp-row {
-            grid-template-columns: 160px repeat(6, 1fr) 80px;
-          }
-
           .sv-emp-avatar {
             width: 28px;
             height: 28px;
             font-size: 10px;
           }
-
-          .sv-slot-time {
-            font-size: 8px;
-          }
+          .sv-slot-time { font-size: 8px; }
         }
 
         /* ─── Print ─── */
         @media print {
-          .sv-container {
-            border: none;
-            border-radius: 0;
-          }
-
-          .sv-scroll {
-            max-height: none;
-            overflow: visible;
-          }
-
-          .sv-cat-header:hover {
-            background: var(--color-neutral-100);
-          }
-
-          .sv-emp-row:hover,
-          .sv-day-cell:hover {
-            background: transparent;
-          }
-
-          .sv-slot:hover {
-            transform: none;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-          }
+          .sv-container { border: none; border-radius: 0; }
+          .sv-scroll { max-height: none; overflow: visible; }
+          .sv-cat-header:hover { background: var(--color-neutral-100); }
+          .sv-emp-row:hover, .sv-day-cell:hover { background: transparent; }
+          .sv-slot:hover { transform: none; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
         }
       `}</style>
     </>
@@ -695,7 +650,12 @@ function SemaineViewRow({
   shiftIndex,
   conflictIndex,
   weeklyShifts,
+  disponibilites,
   todayStr,
+  showDispos,
+  showZones,
+  showEmployeeColumn,
+  gridCols,
   onCellClick,
   onShiftDrop,
   onDayClick,
@@ -705,7 +665,12 @@ function SemaineViewRow({
   shiftIndex: Map<string, Shift[]>;
   conflictIndex: Map<string, Conflict[]>;
   weeklyShifts: Shift[];
+  disponibilites: Disponibilite[];
   todayStr: string;
+  showDispos: boolean;
+  showZones: boolean;
+  showEmployeeColumn: boolean;
+  gridCols: string;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
   onShiftDrop: (shiftId: string, employeeId: string, toDate: string) => void;
   onDayClick: (dayIndex: number) => void;
@@ -718,21 +683,44 @@ function SemaineViewRow({
   });
 
   const initials = getInitials(employee.first_name, employee.last_name);
-  const isStudent = employee.category === 'etudiant' || employee.category === 'apprenti';
-  const avatarColor = isStudent ? STUDENT_COLOR : SLOT_COLOR;
+  const avatarColor = getSlotColor(employee.category);
+
+  // Overall dispo indicator for the week (based on first work day with dispo)
+  const weeklyDispoIndicator = useMemo(() => {
+    if (!showDispos) return null;
+    // Combine all days: if any day has dispo → show the "best" indicator
+    let best: ReturnType<typeof getDispoIndicator> = 'none';
+    for (const date of workDays) {
+      const ind = getDispoIndicator(disponibilites, employee.id, date);
+      if (ind === 'full' || ind === 'preferred') { best = ind; break; }
+      if (ind === 'partial' && best === 'none') best = 'partial';
+      if (ind === 'unavailable' && best === 'none') best = 'unavailable';
+    }
+    return best;
+  }, [showDispos, disponibilites, employee.id, workDays]);
+
+  const isNoDispo = showDispos && weeklyDispoIndicator === 'none';
 
   return (
-    <div className={`sv-emp-row ${hasRowConflict ? 'sv-emp-row--conflict' : ''}`}>
+    <div
+      className={`sv-emp-row ${hasRowConflict ? 'sv-emp-row--conflict' : ''} ${isNoDispo ? 'sv-emp-row--no-dispo' : ''}`}
+      style={{ gridTemplateColumns: gridCols }}
+    >
       {/* Employee info */}
-      <div className="sv-emp-cell">
-        <div className="sv-emp-avatar" style={{ backgroundColor: avatarColor }}>
-          {initials}
+      {showEmployeeColumn && (
+        <div className="sv-emp-cell">
+          <div className="sv-emp-avatar" style={{ backgroundColor: avatarColor }}>
+            {initials}
+            {showDispos && weeklyDispoIndicator && (
+              <span className={`sv-dispo-badge sv-dispo-badge--${weeklyDispoIndicator}`} />
+            )}
+          </div>
+          <div className="sv-emp-info">
+            <span className="sv-emp-name">{employee.first_name} {employee.last_name}</span>
+            <span className="sv-emp-meta">{employee.contract_hours}h/sem</span>
+          </div>
         </div>
-        <div className="sv-emp-info">
-          <span className="sv-emp-name">{employee.first_name} {employee.last_name}</span>
-          <span className="sv-emp-meta">{employee.contract_hours}h/sem</span>
-        </div>
-      </div>
+      )}
 
       {/* Day cells */}
       {workDays.map((date, dayIdx) => (
@@ -743,7 +731,10 @@ function SemaineViewRow({
           dayIndex={dayIdx}
           shifts={shiftIndex.get(`${employee.id}|${date}`) || []}
           conflicts={conflictIndex.get(`${employee.id}|${date}`) || []}
+          disponibilites={disponibilites}
           isToday={date === todayStr}
+          showDispos={showDispos}
+          showZones={showZones}
           onCellClick={onCellClick}
           onShiftDrop={onShiftDrop}
           onDayClick={onDayClick}
@@ -772,7 +763,10 @@ function SemaineViewDayCell({
   dayIndex,
   shifts: dayShifts,
   conflicts: dayConflicts,
+  disponibilites,
   isToday,
+  showDispos,
+  showZones,
   onCellClick,
   onShiftDrop,
   onDayClick,
@@ -782,14 +776,16 @@ function SemaineViewDayCell({
   dayIndex: number;
   shifts: Shift[];
   conflicts: Conflict[];
+  disponibilites: Disponibilite[];
   isToday: boolean;
+  showDispos: boolean;
+  showZones: boolean;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
   onShiftDrop: (shiftId: string, employeeId: string, toDate: string) => void;
   onDayClick: (dayIndex: number) => void;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
-  const isStudent = employee.category === 'etudiant' || employee.category === 'apprenti';
-  const slotColor = isStudent ? STUDENT_COLOR : SLOT_COLOR;
+  const slotColor = getSlotColor(employee.category);
 
   // Separate shift types
   const workShifts = dayShifts.filter(s =>
@@ -800,6 +796,12 @@ function SemaineViewDayCell({
   );
   const gardeShift = dayShifts.find(s => s.type === 'garde' || s.type === 'astreinte');
   const formationShift = dayShifts.find(s => s.type === 'formation');
+
+  // Dispo items for this cell
+  const dispoItems = useMemo(() => {
+    if (!showDispos) return [];
+    return enrichDisposWithUsage(disponibilites, dayShifts, employee.id, date);
+  }, [showDispos, disponibilites, dayShifts, employee.id, date]);
 
   const handleClick = useCallback(() => {
     onCellClick(employee.id, date, dayShifts.length > 0 ? dayShifts[0] : null);
@@ -846,9 +848,42 @@ function SemaineViewDayCell({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Zone backgrounds */}
+      {showZones && PLANNING_ZONES.map(zone => {
+        const pos = getZonePosition(zone);
+        return (
+          <div
+            key={zone.id}
+            className="sv-zone-bg"
+            style={{
+              left: `${pos.left}%`,
+              width: `${pos.width}%`,
+              background: zone.color,
+              borderLeft: `1px dashed ${zone.borderColor}`,
+              borderRight: `1px dashed ${zone.borderColor}`,
+            }}
+          />
+        );
+      })}
+
+      {/* Dispo layer */}
+      {showDispos && dispoItems.map(item => {
+        const pos = getSlotPosition(item.start_time, item.end_time);
+        return (
+          <div
+            key={item.id}
+            className={`sv-dispo-bar sv-dispo-bar--${item.type === 'preferred' ? 'preferred' : 'available'}`}
+            style={{
+              left: `${pos.left}%`,
+              width: `${pos.width}%`,
+            }}
+          />
+        );
+      })}
+
       {/* Grid lines */}
       <div className="sv-grid-lines">
-        {Array.from({ length: HOURS_SPAN }).map((_, i) => (
+        {Array.from({ length: TIMELINE_SPAN }).map((_, i) => (
           <div key={i} className="sv-grid-line" />
         ))}
       </div>
@@ -862,7 +897,7 @@ function SemaineViewDayCell({
 
       {/* Formation */}
       {formationShift && !leaveShift && (
-        <div className="sv-slot sv-slot--special" style={{ background: '#3b82f6' }}>
+        <div className="sv-slot sv-slot--special" style={{ background: COLORS.formation }}>
           📖
         </div>
       )}
@@ -871,7 +906,7 @@ function SemaineViewDayCell({
       {gardeShift && !leaveShift && !formationShift && (
         <div
           className="sv-slot sv-slot--special"
-          style={{ background: gardeShift.type === 'garde' ? '#ef4444' : '#f59e0b' }}
+          style={{ background: gardeShift.type === 'garde' ? COLORS.garde : COLORS.astreinte }}
         >
           {gardeShift.type === 'garde' ? '🔴' : '🟡'}
         </div>

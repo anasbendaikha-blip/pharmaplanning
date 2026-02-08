@@ -1,95 +1,59 @@
 'use client';
 
-import { useMemo, memo, useCallback, useState } from 'react';
-import type { Employee, Shift, Conflict, EmployeeCategory } from '@/lib/types';
+import { useMemo, memo, useCallback } from 'react';
+import type { Employee, Shift, Conflict, EmployeeCategory, Disponibilite } from '@/lib/types';
 import { formatHours } from '@/lib/utils/hourUtils';
+import {
+  TIMELINE_START,
+  TIMELINE_END,
+  TIMELINE_SPAN,
+  TIMELINE_TICKS,
+  PLANNING_ZONES,
+  COLORS,
+  CATEGORY_ORDER,
+  CATEGORY_CONFIG,
+  Z_LAYERS,
+  getSlotPosition,
+  getZonePosition,
+  formatTime,
+  formatTimeRange,
+  getInitials,
+  getSlotColor,
+} from '@/lib/planning-config';
+import {
+  enrichDisposWithUsage,
+  getDispoIndicator,
+  getDispoTooltip,
+} from '@/lib/disponibilites-service';
 import ConflictBadge from './ConflictBadge';
-
-/** Plage horaire de la timeline (8h - 21h) — style BaggPlanning */
-const HOUR_START = 8;
-const HOUR_END = 21;
-const HOURS_SPAN = HOUR_END - HOUR_START;
-
-/** Couleurs uniformes BaggPlanning */
-const SLOT_COLOR = '#6366f1';
-const STUDENT_COLOR = '#a78bfa';
-const CONGE_COLOR = '#ef4444';
-
-/** Ordre d'affichage des catégories */
-const CATEGORY_ORDER: EmployeeCategory[] = [
-  'pharmacien_titulaire',
-  'pharmacien_adjoint',
-  'preparateur',
-  'rayonniste',
-  'apprenti',
-  'etudiant',
-];
-
-/** Info catégories */
-const CATEGORY_INFO: Record<string, { label: string; color: string; icon: string }> = {
-  pharmacien_titulaire: { label: 'Pharmaciens Titulaires', color: '#2563eb', icon: '💊' },
-  pharmacien_adjoint: { label: 'Pharmaciens Adjoints', color: '#3b82f6', icon: '💊' },
-  preparateur: { label: 'Préparateurs', color: '#10b981', icon: '⚗️' },
-  rayonniste: { label: 'Rayonnistes', color: '#f59e0b', icon: '📦' },
-  apprenti: { label: 'Apprentis', color: '#8b5cf6', icon: '🎓' },
-  etudiant: { label: 'Étudiants', color: '#ec4899', icon: '📚' },
-};
 
 interface JourViewProps {
   employees: Employee[];
   shifts: Shift[];
   conflicts: Conflict[];
+  disponibilites: Disponibilite[];
   date: string;
   filter: 'all' | EmployeeCategory;
   hideEmpty: boolean;
+  showDispos: boolean;
+  showZones: boolean;
+  showEmployeeColumn: boolean;
   collapsedCats: Set<EmployeeCategory>;
   onToggleCategory: (cat: EmployeeCategory) => void;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
-}
-
-/** Obtient les initiales d'un employé (max 2 lettres) */
-function getInitials(firstName: string, lastName: string): string {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
-
-/** Convertit "HH:MM" en nombre décimal d'heures */
-function timeToDecimal(time: string): number {
-  const [h, m] = time.split(':').map(Number);
-  return h + m / 60;
-}
-
-/** Formate "HH:MM" → "8h30" ou "8h" */
-function formatTime(time: string): string {
-  const [h, m] = time.split(':');
-  const hour = parseInt(h, 10);
-  const min = parseInt(m, 10);
-  return min === 0 ? `${hour}h` : `${hour}h${m}`;
-}
-
-/** Formate plage "8h30-19h30" */
-function formatSlotTime(start: string, end: string): string {
-  return `${formatTime(start)}-${formatTime(end)}`;
-}
-
-/** Calcule la position d'un shift dans la timeline */
-function getSlotPosition(startTime: string, endTime: string): { left: number; width: number } {
-  const startDec = timeToDecimal(startTime);
-  const endDec = timeToDecimal(endTime);
-
-  const left = ((Math.max(startDec, HOUR_START) - HOUR_START) / HOURS_SPAN) * 100;
-  const right = ((Math.min(endDec, HOUR_END) - HOUR_START) / HOURS_SPAN) * 100;
-  const width = Math.max(right - left, 3);
-
-  return { left, width };
 }
 
 export default function JourView({
   employees,
   shifts,
   conflicts,
+  disponibilites,
   date,
   filter,
   hideEmpty,
+  showDispos,
+  showZones,
+  showEmployeeColumn,
   collapsedCats,
   onToggleCategory,
   onCellClick,
@@ -141,10 +105,8 @@ export default function JourView({
     return { present: presentIds.size, totalSlots: workShifts.length, totalHours };
   }, [dayShifts]);
 
-  // Timeline heures
-  const timelineHours = useMemo(() => {
-    return Array.from({ length: HOURS_SPAN + 1 }, (_, i) => HOUR_START + i);
-  }, []);
+  // Grid columns depend on showEmployeeColumn
+  const gridCols = showEmployeeColumn ? '190px 1fr 80px' : '1fr 80px';
 
   return (
     <>
@@ -162,14 +124,38 @@ export default function JourView({
         </div>
 
         {/* Timeline header */}
-        <div className="jv-timeline-wrap">
-          <div className="jv-emp-header">EMPLOYÉ</div>
+        <div className="jv-timeline-wrap" style={{ gridTemplateColumns: gridCols }}>
+          {showEmployeeColumn && <div className="jv-emp-header">EMPLOYÉ</div>}
           <div className="jv-timeline-header">
-            {timelineHours.map(h => (
-              <div key={h} className="jv-hour-mark">
-                <span className="jv-hour-label">{h}h</span>
-              </div>
-            ))}
+            {/* Zones in header */}
+            {showZones && PLANNING_ZONES.map(zone => {
+              const pos = getZonePosition(zone);
+              return (
+                <div
+                  key={zone.id}
+                  className="jv-zone-header"
+                  style={{
+                    left: `${pos.left}%`,
+                    width: `${pos.width}%`,
+                    background: zone.color,
+                    borderLeft: `1px solid ${zone.borderColor}`,
+                    borderRight: `1px solid ${zone.borderColor}`,
+                  }}
+                >
+                  <span className="jv-zone-label" style={{ color: zone.textColor }}>{zone.label}</span>
+                </div>
+              );
+            })}
+            {/* Hour tick marks */}
+            {TIMELINE_TICKS.map(h => {
+              const pct = ((h - TIMELINE_START) / TIMELINE_SPAN) * 100;
+              return (
+                <div key={h} className="jv-tick" style={{ left: `${pct}%` }}>
+                  <span className="jv-tick-label">{h}h</span>
+                  <span className="jv-tick-line" />
+                </div>
+              );
+            })}
           </div>
           <div className="jv-total-header">Total</div>
         </div>
@@ -177,7 +163,7 @@ export default function JourView({
         {/* Body */}
         <div className="jv-body">
           {Array.from(employeesByCategory.entries()).map(([category, catEmps]) => {
-            const info = CATEGORY_INFO[category] || { label: category, color: '#666', icon: '' };
+            const config = CATEGORY_CONFIG[category];
             const isCollapsed = collapsedCats.has(category);
 
             // Filter out empty employees
@@ -195,8 +181,9 @@ export default function JourView({
                   onClick={() => onToggleCategory(category)}
                 >
                   <span className="jv-cat-chevron">{isCollapsed ? '\u25B6' : '\u25BC'}</span>
-                  <span className="jv-cat-icon">{info.icon}</span>
-                  <span className="jv-cat-name">{info.label} ({visibleEmps.length})</span>
+                  <span className="jv-cat-dot" style={{ backgroundColor: config.color }} />
+                  <span className="jv-cat-icon">{config.icon}</span>
+                  <span className="jv-cat-name">{config.label} ({visibleEmps.length})</span>
                 </div>
 
                 {/* Employee rows */}
@@ -206,7 +193,11 @@ export default function JourView({
                     employee={emp}
                     shifts={shiftsByEmployee.get(emp.id) || []}
                     conflicts={conflicts.filter(c => c.employee_ids.includes(emp.id) && c.date === date)}
+                    disponibilites={disponibilites}
                     date={date}
+                    showDispos={showDispos}
+                    showZones={showZones}
+                    showEmployeeColumn={showEmployeeColumn}
                     onCellClick={onCellClick}
                   />
                 ))}
@@ -218,7 +209,7 @@ export default function JourView({
 
       <style jsx global>{`
         /* ═══════════════════════════════════════════════ */
-        /* JourView — BaggPlanning-style day timeline     */
+        /* JourView V2 — BaggPlanning-style day timeline  */
         /* ═══════════════════════════════════════════════ */
 
         .jv-container {
@@ -252,21 +243,15 @@ export default function JourView({
           color: var(--color-neutral-500);
         }
 
-        .jv-stat {
-          font-weight: 500;
-        }
+        .jv-stat { font-weight: 500; }
+        .jv-stat-dot { color: var(--color-neutral-300); }
 
-        .jv-stat-dot {
-          color: var(--color-neutral-300);
-        }
-
-        /* Timeline header */
+        /* ─── Timeline header ─── */
         .jv-timeline-wrap {
           display: grid;
-          grid-template-columns: 190px 1fr 80px;
           position: sticky;
           top: 0;
-          z-index: 5;
+          z-index: ${Z_LAYERS.stickyHeader};
           background: var(--color-neutral-50);
           border-bottom: 2px solid var(--color-neutral-300);
         }
@@ -284,20 +269,55 @@ export default function JourView({
         }
 
         .jv-timeline-header {
-          display: flex;
           position: relative;
+          height: 44px;
         }
 
-        .jv-hour-mark {
-          flex: 1;
-          padding: 8px 0 8px 4px;
-          border-left: 1px solid var(--color-neutral-200);
+        /* Zone labels in header */
+        .jv-zone-header {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: ${Z_LAYERS.zones};
         }
 
-        .jv-hour-label {
-          font-size: 11px;
+        .jv-zone-label {
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+
+        /* Tick marks */
+        .jv-tick {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          width: 0;
+          z-index: 1;
+        }
+
+        .jv-tick-label {
+          font-size: 10px;
           font-weight: 600;
           color: var(--color-neutral-400);
+          padding-top: 4px;
+          white-space: nowrap;
+          transform: translateX(-50%);
+        }
+
+        .jv-tick-line {
+          flex: 1;
+          width: 1px;
+          background: var(--color-neutral-200);
+          margin-top: 2px;
         }
 
         .jv-total-header {
@@ -314,7 +334,7 @@ export default function JourView({
           border-left: 2px solid var(--color-neutral-300);
         }
 
-        /* Body */
+        /* ─── Body ─── */
         .jv-body {
           max-height: calc(100vh - 360px);
           overflow-y: auto;
@@ -347,9 +367,14 @@ export default function JourView({
           text-align: center;
         }
 
-        .jv-cat-icon {
-          font-size: 14px;
+        .jv-cat-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          flex-shrink: 0;
         }
+
+        .jv-cat-icon { font-size: 14px; }
 
         .jv-cat-name {
           font-size: 12px;
@@ -359,26 +384,22 @@ export default function JourView({
           letter-spacing: 0.03em;
         }
 
-        /* Employee row */
+        /* ─── Employee row ─── */
         .jv-emp-row {
           display: grid;
-          grid-template-columns: 190px 1fr 80px;
           min-height: 52px;
           border-bottom: 1px solid var(--color-neutral-100);
           cursor: pointer;
           transition: background 0.1s;
         }
 
-        .jv-emp-row:hover {
-          background: var(--color-neutral-50);
-        }
+        .jv-emp-row:hover { background: var(--color-neutral-50); }
 
-        .jv-emp-row--conflict {
-          background: var(--color-danger-50);
-        }
+        .jv-emp-row--conflict { background: var(--color-danger-50); }
+        .jv-emp-row--conflict:hover { background: var(--color-danger-100); }
 
-        .jv-emp-row--conflict:hover {
-          background: var(--color-danger-100);
+        .jv-emp-row--no-dispo {
+          opacity: 0.5;
         }
 
         /* Employee info cell */
@@ -402,7 +423,28 @@ export default function JourView({
           font-size: 12px;
           flex-shrink: 0;
           letter-spacing: 0.02em;
+          position: relative;
         }
+
+        .jv-dispo-indicator {
+          position: absolute;
+          bottom: -2px;
+          right: -2px;
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          border: 2px solid white;
+          font-size: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .jv-dispo-indicator--full { background: #22c55e; }
+        .jv-dispo-indicator--partial { background: #f59e0b; }
+        .jv-dispo-indicator--preferred { background: #3b82f6; }
+        .jv-dispo-indicator--unavailable { background: #ef4444; }
+        .jv-dispo-indicator--none { background: #94a3b8; }
 
         .jv-emp-info {
           min-width: 0;
@@ -425,26 +467,59 @@ export default function JourView({
           font-weight: 500;
         }
 
-        /* Timeline cell */
+        /* ─── Timeline cell ─── */
         .jv-timeline-cell {
           position: relative;
           padding: 6px 0;
         }
 
-        .jv-gridlines {
+        /* Zone backgrounds in rows */
+        .jv-zone-bg {
           position: absolute;
-          inset: 0;
-          display: flex;
+          top: 0;
+          bottom: 0;
+          z-index: ${Z_LAYERS.zones};
           pointer-events: none;
         }
 
-        .jv-gridline {
-          flex: 1;
-          border-right: 1px solid var(--color-neutral-50);
+        /* Disponibilité layer */
+        .jv-dispo-layer {
+          position: absolute;
+          top: 4px;
+          bottom: 4px;
+          border-radius: 4px;
+          z-index: ${Z_LAYERS.disponibilites};
+          pointer-events: none;
         }
 
-        .jv-gridline:nth-child(even) {
-          border-right-color: var(--color-neutral-100);
+        .jv-dispo-layer--available {
+          background: ${COLORS.dispoAvailable};
+          border: 1px solid ${COLORS.dispoBorder};
+        }
+
+        .jv-dispo-layer--preferred {
+          background: ${COLORS.dispoPreferred};
+          border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        /* Grid lines */
+        .jv-gridlines {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+          z-index: ${Z_LAYERS.gridlines};
+        }
+
+        .jv-gridline-tick {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 1px;
+          background: var(--color-neutral-100);
+        }
+
+        .jv-gridline-tick--major {
+          background: var(--color-neutral-200);
         }
 
         /* Shift slots */
@@ -460,7 +535,7 @@ export default function JourView({
           font-weight: 600;
           color: white;
           cursor: pointer;
-          z-index: 2;
+          z-index: ${Z_LAYERS.work};
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
           transition: transform 0.15s, box-shadow 0.15s;
           overflow: hidden;
@@ -470,7 +545,7 @@ export default function JourView({
         .jv-slot:hover {
           transform: translateY(-1px);
           box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
-          z-index: 3;
+          z-index: ${Z_LAYERS.work + 1};
         }
 
         .jv-slot-time {
@@ -493,16 +568,12 @@ export default function JourView({
           right: 4px !important;
           width: auto !important;
           background: repeating-linear-gradient(
-            45deg,
-            #fee2e2,
-            #fee2e2 4px,
-            #fecaca 4px,
-            #fecaca 8px
+            45deg, #fee2e2, #fee2e2 4px, #fecaca 4px, #fecaca 8px
           ) !important;
           color: #991b1b;
           border: 1px dashed #ef4444;
           font-weight: 600;
-          z-index: 5;
+          z-index: ${Z_LAYERS.conges};
           font-size: 12px;
         }
 
@@ -512,7 +583,7 @@ export default function JourView({
           width: auto !important;
           font-size: 11px;
           cursor: default;
-          z-index: 5;
+          z-index: ${Z_LAYERS.conges};
           font-weight: 600;
         }
 
@@ -523,7 +594,7 @@ export default function JourView({
           right: 4px;
           display: flex;
           gap: 2px;
-          z-index: 6;
+          z-index: ${Z_LAYERS.conflicts};
         }
 
         /* Total cell */
@@ -546,40 +617,21 @@ export default function JourView({
           color: var(--color-neutral-300);
         }
 
-        /* Responsive */
+        /* ─── Responsive ─── */
         @media (max-width: 1024px) {
-          .jv-timeline-wrap,
-          .jv-emp-row {
-            grid-template-columns: 160px 1fr 70px;
-          }
-
           .jv-emp-avatar {
             width: 32px;
             height: 32px;
             font-size: 11px;
           }
-
-          .jv-slot-time {
-            font-size: 10px;
-          }
+          .jv-slot-time { font-size: 10px; }
         }
 
-        /* Print */
+        /* ─── Print ─── */
         @media print {
-          .jv-container {
-            border: none;
-            border-radius: 0;
-          }
-
-          .jv-body {
-            max-height: none;
-            overflow: visible;
-          }
-
-          .jv-emp-row:hover,
-          .jv-cat-header:hover {
-            background: transparent;
-          }
+          .jv-container { border: none; border-radius: 0; }
+          .jv-body { max-height: none; overflow: visible; }
+          .jv-emp-row:hover, .jv-cat-header:hover { background: transparent; }
         }
       `}</style>
     </>
@@ -594,7 +646,11 @@ interface JourViewRowProps {
   employee: Employee;
   shifts: Shift[];
   conflicts: Conflict[];
+  disponibilites: Disponibilite[];
   date: string;
+  showDispos: boolean;
+  showZones: boolean;
+  showEmployeeColumn: boolean;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
 }
 
@@ -602,7 +658,11 @@ const JourViewRow = memo(function JourViewRow({
   employee,
   shifts: empShifts,
   conflicts,
+  disponibilites,
   date,
+  showDispos,
+  showZones,
+  showEmployeeColumn,
   onCellClick,
 }: JourViewRowProps) {
   const totalHours = empShifts.reduce((sum, s) => sum + s.effective_hours, 0);
@@ -619,10 +679,27 @@ const JourViewRow = memo(function JourViewRow({
   const formationShift = empShifts.find(s => s.type === 'formation');
 
   const initials = getInitials(employee.first_name, employee.last_name);
-  const isStudent = employee.category === 'etudiant' || employee.category === 'apprenti';
-  const slotColor = isStudent ? STUDENT_COLOR : SLOT_COLOR;
+  const slotColor = getSlotColor(employee.category);
 
-  // Subtitle: either time range or status
+  // Disponibilité items
+  const dispoItems = useMemo(() => {
+    if (!showDispos) return [];
+    return enrichDisposWithUsage(disponibilites, empShifts, employee.id, date);
+  }, [showDispos, disponibilites, empShifts, employee.id, date]);
+
+  // Dispo indicator
+  const dispoIndicator = useMemo(() => {
+    if (!showDispos) return null;
+    return getDispoIndicator(disponibilites, employee.id, date);
+  }, [showDispos, disponibilites, employee.id, date]);
+
+  // Tooltip
+  const dispoTitle = useMemo(() => {
+    if (!showDispos) return undefined;
+    return getDispoTooltip(disponibilites, employee, date);
+  }, [showDispos, disponibilites, employee, date]);
+
+  // Subtitle
   const subtitle = useMemo(() => {
     if (leaveShift) {
       return leaveShift.type === 'maladie' ? 'Maladie' : leaveShift.type === 'rtt' ? 'RTT' : 'Congé';
@@ -630,7 +707,7 @@ const JourViewRow = memo(function JourViewRow({
     if (formationShift) return 'Formation';
     if (gardeShift) return gardeShift.type === 'garde' ? 'Garde' : 'Astreinte';
     if (workShifts.length > 1) return `${workShifts.length} créneaux`;
-    if (workShifts.length === 1) return formatSlotTime(workShifts[0].start_time, workShifts[0].end_time);
+    if (workShifts.length === 1) return formatTimeRange(workShifts[0].start_time, workShifts[0].end_time);
     return '—';
   }, [leaveShift, formationShift, gardeShift, workShifts]);
 
@@ -638,32 +715,83 @@ const JourViewRow = memo(function JourViewRow({
     onCellClick(employee.id, date, empShifts.length > 0 ? empShifts[0] : null);
   }, [employee.id, date, empShifts, onCellClick]);
 
+  const gridCols = showEmployeeColumn ? '190px 1fr 80px' : '1fr 80px';
+  const isNoDispo = showDispos && dispoIndicator === 'none';
+
   return (
     <div
-      className={`jv-emp-row ${hasConflicts ? 'jv-emp-row--conflict' : ''}`}
+      className={`jv-emp-row ${hasConflicts ? 'jv-emp-row--conflict' : ''} ${isNoDispo ? 'jv-emp-row--no-dispo' : ''}`}
+      style={{ gridTemplateColumns: gridCols }}
       onClick={handleClick}
+      title={dispoTitle}
     >
       {/* Employee info */}
-      <div className="jv-emp-cell">
-        <div
-          className="jv-emp-avatar"
-          style={{ background: workShifts.length > 0 || gardeShift ? slotColor : '#cbd5e1' }}
-        >
-          {initials}
+      {showEmployeeColumn && (
+        <div className="jv-emp-cell">
+          <div
+            className="jv-emp-avatar"
+            style={{ background: workShifts.length > 0 || gardeShift ? slotColor : '#cbd5e1' }}
+          >
+            {initials}
+            {showDispos && dispoIndicator && (
+              <span className={`jv-dispo-indicator jv-dispo-indicator--${dispoIndicator}`} />
+            )}
+          </div>
+          <div className="jv-emp-info">
+            <span className="jv-emp-name">{employee.first_name} {employee.last_name}</span>
+            <span className="jv-emp-subtitle">{subtitle}</span>
+          </div>
         </div>
-        <div className="jv-emp-info">
-          <span className="jv-emp-name">{employee.first_name} {employee.last_name}</span>
-          <span className="jv-emp-subtitle">{subtitle}</span>
-        </div>
-      </div>
+      )}
 
       {/* Timeline */}
       <div className="jv-timeline-cell">
+        {/* Zone backgrounds */}
+        {showZones && PLANNING_ZONES.map(zone => {
+          const pos = getZonePosition(zone);
+          return (
+            <div
+              key={zone.id}
+              className="jv-zone-bg"
+              style={{
+                left: `${pos.left}%`,
+                width: `${pos.width}%`,
+                background: zone.color,
+                borderLeft: `1px dashed ${zone.borderColor}`,
+                borderRight: `1px dashed ${zone.borderColor}`,
+              }}
+            />
+          );
+        })}
+
+        {/* Disponibilité layer */}
+        {showDispos && dispoItems.map(item => {
+          const pos = getSlotPosition(item.start_time, item.end_time);
+          return (
+            <div
+              key={item.id}
+              className={`jv-dispo-layer jv-dispo-layer--${item.type === 'preferred' ? 'preferred' : 'available'}`}
+              style={{
+                left: `${pos.left}%`,
+                width: `${pos.width}%`,
+              }}
+            />
+          );
+        })}
+
         {/* Grid lines */}
         <div className="jv-gridlines">
-          {Array.from({ length: HOURS_SPAN }).map((_, i) => (
-            <div key={i} className="jv-gridline" />
-          ))}
+          {TIMELINE_TICKS.map(h => {
+            const pct = ((h - TIMELINE_START) / TIMELINE_SPAN) * 100;
+            const isMajor = h % 4 === 0;
+            return (
+              <div
+                key={h}
+                className={`jv-gridline-tick ${isMajor ? 'jv-gridline-tick--major' : ''}`}
+                style={{ left: `${pct}%` }}
+              />
+            );
+          })}
         </div>
 
         {/* Leave */}
@@ -675,8 +803,8 @@ const JourViewRow = memo(function JourViewRow({
 
         {/* Formation */}
         {formationShift && !leaveShift && (
-          <div className="jv-slot jv-slot--special" style={{ background: '#3b82f6' }}>
-            📖 Formation {formatSlotTime(formationShift.start_time, formationShift.end_time)}
+          <div className="jv-slot jv-slot--special" style={{ background: COLORS.formation }}>
+            📖 Formation {formatTimeRange(formationShift.start_time, formationShift.end_time)}
           </div>
         )}
 
@@ -684,9 +812,9 @@ const JourViewRow = memo(function JourViewRow({
         {gardeShift && !leaveShift && !formationShift && (
           <div
             className="jv-slot jv-slot--special"
-            style={{ background: gardeShift.type === 'garde' ? '#ef4444' : '#f59e0b' }}
+            style={{ background: gardeShift.type === 'garde' ? COLORS.garde : COLORS.astreinte }}
           >
-            {gardeShift.type === 'garde' ? '🔴 Garde' : '🟡 Astreinte'} {formatSlotTime(gardeShift.start_time, gardeShift.end_time)}
+            {gardeShift.type === 'garde' ? '🔴 Garde' : '🟡 Astreinte'} {formatTimeRange(gardeShift.start_time, gardeShift.end_time)}
           </div>
         )}
 
@@ -709,7 +837,7 @@ const JourViewRow = memo(function JourViewRow({
               }}
             >
               <span className="jv-slot-time">
-                {formatSlotTime(shift.start_time, shift.end_time)}
+                {formatTimeRange(shift.start_time, shift.end_time)}
               </span>
               {shift.break_duration > 0 && pos.width > 20 && (
                 <span className="jv-slot-break">P:{shift.break_duration}min</span>
