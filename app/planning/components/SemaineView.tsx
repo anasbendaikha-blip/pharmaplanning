@@ -23,7 +23,10 @@ import {
 import {
   getDispoIndicator,
   enrichDisposWithUsage,
+  findUnusedDispos,
 } from '@/lib/disponibilites-service';
+import { calculateDayStats } from '@/lib/week-analytics';
+import type { DayStats } from '@/lib/week-analytics';
 import ConflictBadge from './ConflictBadge';
 
 interface SemaineViewProps {
@@ -126,6 +129,15 @@ export default function SemaineView({
     });
   }, [workDays, shiftIndex]);
 
+  // Day stats for header
+  const dayStatsMap = useMemo(() => {
+    const map = new Map<string, DayStats>();
+    for (const date of workDays) {
+      map.set(date, calculateDayStats(date, shifts));
+    }
+    return map;
+  }, [workDays, shifts]);
+
   // Grid columns
   const empColWidth = showEmployeeColumn ? '190px' : '0px';
   const headerGridCols = showEmployeeColumn
@@ -144,11 +156,13 @@ export default function SemaineView({
               {workDays.map((dateStr, dayIdx) => {
                 const date = parseISODate(dateStr);
                 const isToday = dateStr === todayStr;
+                const stats = dayStatsMap.get(dateStr);
                 return (
                   <div
                     key={dateStr}
-                    className={`sv-header-day ${isToday ? 'sv-header-day--today' : ''}`}
+                    className={`sv-header-day ${isToday ? 'sv-header-day--today' : ''} ${stats?.hasGaps ? 'sv-header-day--gaps' : ''} ${stats?.hasConflicts ? 'sv-header-day--conflicts' : ''}`}
                     onClick={() => onDayClick(dayIdx)}
+                    title={`${getDayShortFr(date)} ${date.getDate()} — ${stats?.uniqueWorkers ?? 0} employés, ${stats?.totalHours ?? 0}h, couverture ${stats?.coverage ?? 0}%`}
                   >
                     <div className="sv-day-name">{getDayShortFr(date)}</div>
                     <div className="sv-day-num">{date.getDate()}</div>
@@ -157,6 +171,22 @@ export default function SemaineView({
                         <span key={h} className="sv-hour-mark">{h}h</span>
                       ))}
                     </div>
+                    {/* Day stats */}
+                    {stats && (
+                      <div className="sv-day-stats">
+                        <span className="sv-day-stat-workers">{stats.uniqueWorkers} pers.</span>
+                        <span className={`sv-day-stat-coverage ${stats.coverage < 80 ? 'sv-day-stat-coverage--low' : ''}`}>
+                          {stats.coverage}%
+                        </span>
+                      </div>
+                    )}
+                    {/* Gap / Conflict indicators */}
+                    {stats?.hasGaps && (
+                      <div className="sv-day-indicator sv-day-indicator--gap">⚠️ Lacune</div>
+                    )}
+                    {stats?.hasConflicts && (
+                      <div className="sv-day-indicator sv-day-indicator--conflict">⚠️ Conflit</div>
+                    )}
                   </div>
                 );
               })}
@@ -272,9 +302,17 @@ export default function SemaineView({
           transition: background 0.1s;
         }
 
-        .sv-header-day:hover { background: var(--color-neutral-100); }
+        .sv-header-day:hover { background: var(--color-neutral-100); transform: translateY(-1px); }
         .sv-header-day--today { background: var(--color-primary-50); }
         .sv-header-day--today:hover { background: var(--color-primary-100); }
+
+        .sv-header-day--gaps:not(.sv-header-day--today) {
+          background: rgba(245, 158, 11, 0.06);
+        }
+
+        .sv-header-day--conflicts:not(.sv-header-day--today) {
+          background: rgba(239, 68, 68, 0.04);
+        }
 
         .sv-day-name {
           font-size: 12px;
@@ -305,6 +343,49 @@ export default function SemaineView({
           font-size: 9px;
           color: var(--color-neutral-400);
           font-weight: 500;
+        }
+
+        /* Day stats in header */
+        .sv-day-stats {
+          display: flex;
+          gap: 6px;
+          justify-content: center;
+          margin-top: 3px;
+          font-size: 10px;
+        }
+
+        .sv-day-stat-workers {
+          color: var(--color-neutral-500);
+          font-weight: 600;
+        }
+
+        .sv-day-stat-coverage {
+          font-weight: 700;
+          color: #10b981;
+        }
+
+        .sv-day-stat-coverage--low {
+          color: #f59e0b;
+        }
+
+        /* Day gap/conflict indicators */
+        .sv-day-indicator {
+          font-size: 9px;
+          font-weight: 700;
+          padding: 1px 6px;
+          border-radius: 3px;
+          margin-top: 3px;
+          text-align: center;
+        }
+
+        .sv-day-indicator--gap {
+          background: rgba(245, 158, 11, 0.12);
+          color: #92400e;
+        }
+
+        .sv-day-indicator--conflict {
+          background: rgba(239, 68, 68, 0.1);
+          color: #991b1b;
         }
 
         .sv-header-total {
@@ -574,6 +655,17 @@ export default function SemaineView({
           cursor: default;
           z-index: ${Z_LAYERS.conges};
           font-weight: 600;
+        }
+
+        /* Unused dispo indicator */
+        .sv-dispo-unused {
+          position: absolute;
+          top: 3px;
+          right: 3px;
+          font-size: 11px;
+          z-index: ${Z_LAYERS.cta};
+          opacity: 0.7;
+          pointer-events: none;
         }
 
         /* Conflict indicator on slot */
@@ -940,6 +1032,13 @@ function SemaineViewDayCell({
           </div>
         );
       })}
+
+      {/* Unused dispo indicator */}
+      {showDispos && dispoItems.length > 0 && workShifts.length === 0 && !leaveShift && (
+        <div className="sv-dispo-unused" title="Disponible mais non assigné">
+          ⚠️
+        </div>
+      )}
 
       {/* Conflict badges */}
       {dayConflicts.length > 0 && (

@@ -25,6 +25,7 @@ import type { Shift, Conflict, WeeklyOpeningHours, Employee, EmployeeCategory, D
 import { LEGEND_ITEMS } from '@/lib/planning-config';
 import { generateMockDisponibilites } from './data/mockDisponibilites';
 import { analyzeWeeklyDispos, getAlertCounts, sortAlertsByPriority } from '@/lib/planning-analytics';
+import { calculateWeekStats } from '@/lib/week-analytics';
 
 import WeekNavigation from './components/WeekNavigation';
 import JourView from './components/JourView';
@@ -194,6 +195,11 @@ export default function PlanningPage() {
     if (!dispoStats) return [];
     return sortAlertsByPriority(dispoStats.alerts);
   }, [dispoStats]);
+
+  // ─── Week Stats (V2 Phase 4) ───
+  const weekStats = useMemo(() => {
+    return calculateWeekStats(weekDates, shifts);
+  }, [weekDates, shifts]);
 
   const handleWeekChange = useCallback((newMonday: Date) => {
     setCurrentMonday(newMonday);
@@ -464,6 +470,16 @@ export default function PlanningPage() {
               {showDispos && dispoStats && (
                 <span className="pl-stat-pill pl-stat-pill--dispo">
                   {dispoStats.usage_rate}% dispos utilisées
+                </span>
+              )}
+              {viewMode === 'semaine' && (
+                <span className={`pl-stat-pill ${weekStats.averageCoverage < 80 ? 'pl-stat-pill--warning' : 'pl-stat-pill--coverage'}`}>
+                  {weekStats.averageCoverage}% couverture
+                </span>
+              )}
+              {viewMode === 'semaine' && weekStats.daysWithGaps > 0 && (
+                <span className="pl-stat-pill pl-stat-pill--warning">
+                  {weekStats.daysWithGaps} j. lacunes
                 </span>
               )}
             </div>
@@ -838,6 +854,16 @@ export default function PlanningPage() {
         .pl-stat-pill--dispo {
           background: rgba(34, 197, 94, 0.1);
           color: #16a34a;
+        }
+
+        .pl-stat-pill--coverage {
+          background: rgba(16, 185, 129, 0.1);
+          color: #059669;
+        }
+
+        .pl-stat-pill--warning {
+          background: rgba(245, 158, 11, 0.12);
+          color: #b45309;
         }
 
         /* V2 toggle buttons */
