@@ -37,6 +37,12 @@ export async function POST() {
       );
     }
 
+    // Mettre a jour le nom de l'organisation
+    await supabase
+      .from('organizations')
+      .update({ name: 'Pharmacie des Coquelicots' })
+      .eq('id', ORG_ID);
+
     // Nettoyer les anciens employes
     await supabase.from('employees').delete().eq('organization_id', ORG_ID);
 
