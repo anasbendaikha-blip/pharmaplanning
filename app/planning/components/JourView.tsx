@@ -24,7 +24,9 @@ import {
   enrichDisposWithUsage,
   getDispoIndicator,
   getDispoTooltip,
+  findUnusedDispos,
 } from '@/lib/disponibilites-service';
+import type { QuickAssignTarget } from '@/lib/types/quick-assign';
 import ConflictBadge from './ConflictBadge';
 
 interface JourViewProps {
@@ -41,6 +43,7 @@ interface JourViewProps {
   collapsedCats: Set<EmployeeCategory>;
   onToggleCategory: (cat: EmployeeCategory) => void;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
+  onDispoCTA?: (target: QuickAssignTarget) => void;
 }
 
 export default function JourView({
@@ -57,6 +60,7 @@ export default function JourView({
   collapsedCats,
   onToggleCategory,
   onCellClick,
+  onDispoCTA,
 }: JourViewProps) {
   // Shifts du jour uniquement
   const dayShifts = useMemo(() => shifts.filter(s => s.date === date), [shifts, date]);
@@ -199,6 +203,7 @@ export default function JourView({
                     showZones={showZones}
                     showEmployeeColumn={showEmployeeColumn}
                     onCellClick={onCellClick}
+                    onDispoCTA={onDispoCTA}
                   />
                 ))}
               </div>
@@ -502,6 +507,53 @@ export default function JourView({
           border: 1px solid rgba(59, 130, 246, 0.3);
         }
 
+        /* CTA button on unused dispos */
+        .jv-dispo-cta {
+          position: absolute;
+          top: 6px;
+          bottom: 6px;
+          z-index: ${Z_LAYERS.cta};
+          border: 2px dashed rgba(34, 197, 94, 0.4);
+          border-radius: 5px;
+          background: rgba(34, 197, 94, 0.05);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: all 0.2s;
+          opacity: 0;
+          font-family: var(--font-family-primary);
+        }
+
+        .jv-emp-row:hover .jv-dispo-cta {
+          opacity: 1;
+        }
+
+        .jv-dispo-cta:hover {
+          background: rgba(34, 197, 94, 0.12);
+          border-color: rgba(34, 197, 94, 0.6);
+          transform: scale(1.02);
+        }
+
+        .jv-dispo-cta-icon {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          background: #22c55e;
+          color: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 16px;
+          font-weight: 700;
+          box-shadow: 0 2px 6px rgba(34, 197, 94, 0.3);
+          transition: transform 0.15s;
+        }
+
+        .jv-dispo-cta:hover .jv-dispo-cta-icon {
+          transform: scale(1.15);
+        }
+
         /* Grid lines */
         .jv-gridlines {
           position: absolute;
@@ -652,6 +704,7 @@ interface JourViewRowProps {
   showZones: boolean;
   showEmployeeColumn: boolean;
   onCellClick: (employeeId: string, date: string, shift: Shift | null) => void;
+  onDispoCTA?: (target: QuickAssignTarget) => void;
 }
 
 const JourViewRow = memo(function JourViewRow({
@@ -664,6 +717,7 @@ const JourViewRow = memo(function JourViewRow({
   showZones,
   showEmployeeColumn,
   onCellClick,
+  onDispoCTA,
 }: JourViewRowProps) {
   const totalHours = empShifts.reduce((sum, s) => sum + s.effective_hours, 0);
   const hasConflicts = conflicts.some(c => c.severity === 'error');
@@ -698,6 +752,12 @@ const JourViewRow = memo(function JourViewRow({
     if (!showDispos) return undefined;
     return getDispoTooltip(disponibilites, employee, date);
   }, [showDispos, disponibilites, employee, date]);
+
+  // Unused dispos (for CTA buttons)
+  const unusedDispos = useMemo(() => {
+    if (!showDispos || !onDispoCTA) return [];
+    return findUnusedDispos(disponibilites, empShifts, employee.id, date);
+  }, [showDispos, onDispoCTA, disponibilites, empShifts, employee.id, date]);
 
   // Subtitle
   const subtitle = useMemo(() => {
@@ -776,6 +836,29 @@ const JourViewRow = memo(function JourViewRow({
                 width: `${pos.width}%`,
               }}
             />
+          );
+        })}
+
+        {/* CTA buttons on unused dispos */}
+        {showDispos && onDispoCTA && unusedDispos.map(ud => {
+          const pos = getSlotPosition(ud.start_time, ud.end_time);
+          return (
+            <button
+              key={`cta-${ud.id}`}
+              className="jv-dispo-cta"
+              style={{
+                left: `${pos.left}%`,
+                width: `${pos.width}%`,
+              }}
+              onClick={e => {
+                e.stopPropagation();
+                onDispoCTA({ employee, date, dispo: ud });
+              }}
+              type="button"
+              title={`Assigner ${employee.first_name} ${ud.start_time}–${ud.end_time}`}
+            >
+              <span className="jv-dispo-cta-icon">+</span>
+            </button>
           );
         })}
 

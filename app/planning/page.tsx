@@ -21,7 +21,7 @@ import {
   updateShift as dbUpdateShift,
   deleteShift as dbDeleteShift,
 } from '@/lib/supabase/queries';
-import type { Shift, Conflict, WeeklyOpeningHours, Employee, EmployeeCategory, Disponibilite, DispoStats } from '@/lib/types';
+import type { Shift, Conflict, WeeklyOpeningHours, Employee, EmployeeCategory, Disponibilite, DispoStats, QuickAssignTarget } from '@/lib/types';
 import { LEGEND_ITEMS } from '@/lib/planning-config';
 import { generateMockDisponibilites } from './data/mockDisponibilites';
 import { analyzeWeeklyDispos, getAlertCounts, sortAlertsByPriority } from '@/lib/planning-analytics';
@@ -32,6 +32,7 @@ import SemaineView from './components/SemaineView';
 import PaperView from './components/PaperView';
 import ConflictSummary from './components/ConflictSummary';
 import ShiftModal from './components/ShiftModal';
+import QuickAssignPanel from './components/QuickAssignPanel';
 
 /**
  * Horaires d'ouverture de la Pharmacie Isabelle MAURER
@@ -101,6 +102,9 @@ export default function PlanningPage() {
   const [showZones, setShowZones] = useState(true);
   const [showEmployeeColumn, setShowEmployeeColumn] = useState(true);
   const [showDispoAlerts, setShowDispoAlerts] = useState(false);
+
+  // ─── V2 Phase 3: Quick Assign ───
+  const [quickAssignTarget, setQuickAssignTarget] = useState<QuickAssignTarget | null>(null);
 
   // Jour sélectionné (index 0-5 = Lun-Sam) pour la vue jour
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
@@ -254,6 +258,44 @@ export default function PlanningPage() {
     setSelectedDayIndex(dayIndex);
     setViewMode('jour');
   }, []);
+
+  // ─── Quick Assign handlers (V2 Phase 3) ───
+  const handleDispoCTA = useCallback((target: QuickAssignTarget) => {
+    setQuickAssignTarget(target);
+  }, []);
+
+  const handleQuickAssignClose = useCallback(() => {
+    setQuickAssignTarget(null);
+  }, []);
+
+  const handleQuickAssignConfirm = useCallback(async (shiftData: {
+    employee_id: string;
+    date: string;
+    start_time: string;
+    end_time: string;
+    break_duration: number;
+  }) => {
+    if (!organizationId) return;
+    const employee = employees.find(e => e.id === shiftData.employee_id);
+    const empName = employee ? `${employee.first_name} ${employee.last_name}` : 'Employé';
+
+    const created = await dbCreateShift(organizationId, {
+      employee_id: shiftData.employee_id,
+      date: shiftData.date,
+      start_time: shiftData.start_time,
+      end_time: shiftData.end_time,
+      break_duration: shiftData.break_duration,
+    });
+
+    if (created) {
+      setShifts(prev => [...prev, created]);
+      addToast('success', `Shift créé pour ${empName} (${shiftData.start_time}–${shiftData.end_time})`);
+    } else {
+      addToast('error', `Erreur lors de la création du shift pour ${empName}`);
+    }
+
+    setQuickAssignTarget(null);
+  }, [organizationId, employees, addToast]);
 
   // ─── Modal handlers ───
   const handleModalClose = useCallback(() => {
@@ -611,6 +653,7 @@ export default function PlanningPage() {
               collapsedCats={collapsedCats}
               onToggleCategory={handleToggleCategory}
               onCellClick={handleCellClick}
+              onDispoCTA={handleDispoCTA}
             />
           )}
         </div>
@@ -634,6 +677,18 @@ export default function PlanningPage() {
           organizationId={organizationId || ''}
           onSave={handleSaveShift}
           onDelete={handleDeleteShift}
+        />
+      )}
+
+      {/* Quick Assign Panel (V2 Phase 3) */}
+      {quickAssignTarget && (
+        <QuickAssignPanel
+          employee={quickAssignTarget.employee}
+          date={quickAssignTarget.date}
+          dispo={quickAssignTarget.dispo}
+          existingShifts={shifts.filter(s => s.employee_id === quickAssignTarget.employee.id && s.date === quickAssignTarget.date)}
+          onConfirm={handleQuickAssignConfirm}
+          onClose={handleQuickAssignClose}
         />
       )}
 

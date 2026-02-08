@@ -52,6 +52,16 @@ export type {
   DispoTimelineItem,
 } from './disponibilite';
 
+// Quick Assign (Planning V2 Phase 3)
+export type {
+  QuickAssignPanelProps,
+  SuggestedSlot,
+  QuickAssignState,
+  ValidationResult,
+  ValidationMessage,
+  QuickAssignTarget,
+} from './quick-assign';
+
 // Gardes
 export type {
   GardeDuty,
