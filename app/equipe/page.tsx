@@ -14,6 +14,8 @@ import {
   exportHorairesToJSON,
   downloadFile,
 } from '@/lib/planning-import-export';
+import { usePlanningStore } from '@/lib/hooks/usePlanningStore';
+import type { CreneauType } from '@/lib/store/planning-store';
 
 // ─── Constants ───
 
@@ -96,6 +98,7 @@ export default function GestionEquipePage() {
   const router = useRouter();
   const { organizationId, isLoading: orgLoading } = useOrganization();
   const { addToast } = useToast();
+  const planningStore = usePlanningStore();
 
   // Tab management
   const tabParam = searchParams.get('tab') as TabKey | null;
@@ -380,11 +383,47 @@ export default function GestionEquipePage() {
 
   const handleSaveHoraires = useCallback(async () => {
     setIsSaving(true);
-    await new Promise(r => setTimeout(r, 500));
+    await new Promise(r => setTimeout(r, 300));
+
+    // Sauvegarder dans le store localStorage pour la grille planning
+    for (const h of horaires) {
+      // Determiner le creneau : avant 13h = matin, apres = aprem
+      const [startH] = h.start_time.split(':').map(Number);
+      const [endH] = h.end_time.split(':').map(Number);
+      const isMorning = startH < 13;
+      const isAfternoon = endH > 13;
+
+      if (isMorning) {
+        const creneau: CreneauType = 'matin';
+        planningStore.upsertHoraire({
+          employeeId: h.employee_id,
+          dayOfWeek: h.day_of_week,
+          creneau,
+          startTime: h.start_time,
+          endTime: isMorning && isAfternoon ? '12:30' : h.end_time,
+          breakMinutes: isMorning && isAfternoon ? 0 : h.break_duration,
+          isActive: h.is_active,
+        });
+      }
+
+      if (isAfternoon) {
+        const creneau: CreneauType = 'aprem';
+        planningStore.upsertHoraire({
+          employeeId: h.employee_id,
+          dayOfWeek: h.day_of_week,
+          creneau,
+          startTime: isMorning && isAfternoon ? '14:00' : h.start_time,
+          endTime: h.end_time,
+          breakMinutes: 0,
+          isActive: h.is_active,
+        });
+      }
+    }
+
     setHasChanges(false);
     setIsSaving(false);
-    addToast('success', 'Horaires fixes sauvegardes');
-  }, [addToast]);
+    addToast('success', 'Horaires fixes sauvegardes (store + planning)');
+  }, [addToast, horaires, planningStore]);
 
   const handleResetHoraires = useCallback(() => {
     if (selectedEmployeeId) {

@@ -35,6 +35,7 @@ import WeekNavigation from './components/WeekNavigation';
 import JourView from './components/JourView';
 import SemaineView from './components/SemaineView';
 import PaperView from './components/PaperView';
+import GrilleView from './components/GrilleView';
 import ConflictSummary from './components/ConflictSummary';
 import ShiftModal from './components/ShiftModal';
 import QuickAssignPanel from './components/QuickAssignPanel';
@@ -71,8 +72,8 @@ function getPlanningRulesFromConfig() {
   };
 }
 
-/** Mode de vue : jour, semaine ou papier */
-type ViewMode = 'jour' | 'semaine' | 'paper';
+/** Mode de vue : jour, semaine, grille ou papier */
+type ViewMode = 'jour' | 'semaine' | 'grille' | 'paper';
 
 /** Filtre catégorie */
 type FilterType = 'all' | EmployeeCategory;
@@ -145,7 +146,7 @@ export default function PlanningPage() {
   // Persister les préférences
   useEffect(() => {
     const saved = localStorage.getItem('planning_view_mode');
-    if (saved === 'jour' || saved === 'semaine' || saved === 'paper') {
+    if (saved === 'jour' || saved === 'semaine' || saved === 'grille' || saved === 'paper') {
       setViewMode(saved);
     }
     const savedDays = localStorage.getItem('planning_paper_days');
@@ -574,6 +575,13 @@ export default function PlanningPage() {
               {/* Toggle Semaine / Jour */}
               <div className="pl-view-tabs">
                 <button
+                  className={`pl-view-tab ${viewMode === 'grille' ? 'pl-view-tab--active' : ''}`}
+                  onClick={() => setViewMode('grille')}
+                  type="button"
+                >
+                  Grille
+                </button>
+                <button
                   className={`pl-view-tab ${viewMode === 'semaine' ? 'pl-view-tab--active' : ''}`}
                   onClick={() => setViewMode('semaine')}
                   type="button"
@@ -814,6 +822,13 @@ export default function PlanningPage() {
               <span className="pl-spinner" />
               <span className="pl-loading-text">Chargement du planning...</span>
             </div>
+          ) : viewMode === 'grille' ? (
+            <GrilleView
+              employees={filteredEmployees}
+              weekDates={weekDates}
+              todayStr={todayStr}
+              filter={filter}
+            />
           ) : viewMode === 'paper' ? (
             <div className="pl-paper-wrap">
               <div className="pl-paper-toolbar">
