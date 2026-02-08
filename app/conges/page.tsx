@@ -927,9 +927,6 @@ export default function CongesPage() {
             </div>
           </div>
 
-          {/* Navigation contextuelle */}
-          {renderNavContext()}
-
           {/* Onglets */}
           <div className="cg-tabs">
             <button
@@ -956,6 +953,9 @@ export default function CongesPage() {
             </button>
           </div>
         </section>
+
+        {/* ─── Navigation annee (sous les onglets) ─── */}
+        {activeTab === 'annuel' && renderNavContext()}
 
         {/* ─── Filtres partages Annuel/Mensuel ─── */}
         {(activeTab === 'annuel' || activeTab === 'mensuel') && (
@@ -1221,7 +1221,8 @@ export default function CongesPage() {
         /* ─── Year nav ─── */
         .cg-year-nav {
           display: flex; align-items: center; justify-content: space-between;
-          padding: var(--spacing-3) var(--spacing-5);
+          padding: var(--spacing-3) var(--spacing-4);
+          background: white; border: 1px solid var(--color-neutral-200); border-radius: var(--radius-lg);
         }
         .cg-year-center { display: flex; align-items: center; gap: var(--spacing-3); }
         .cg-year-title { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); color: var(--color-neutral-900); margin: 0; }
