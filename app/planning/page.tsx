@@ -26,6 +26,7 @@ import type { Shift, Conflict, WeeklyOpeningHours, Employee } from '@/lib/types'
 import WeekNavigation from './components/WeekNavigation';
 import GanttChart from './components/GanttChart';
 import DayView from './components/DayView';
+import PaperView from './components/PaperView';
 import ConflictSummary from './components/ConflictSummary';
 import ShiftModal from './components/ShiftModal';
 
@@ -43,7 +44,7 @@ const OPENING_HOURS: WeeklyOpeningHours = {
 };
 
 /** Mode de vue */
-type ViewMode = 'week' | 'day';
+type ViewMode = 'week' | 'day' | 'paper';
 
 /** Noms courts des jours */
 const DAY_TABS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
@@ -74,8 +75,32 @@ export default function PlanningPage() {
   const isCurrentWeek = isSameDay(currentMonday, todayMonday);
   const todayStr = toISODateString(today);
 
-  // Mode de vue : semaine ou jour
+  // Mode de vue : semaine, jour ou papier
   const [viewMode, setViewMode] = useState<ViewMode>('week');
+
+  // Nombre de jours affichés en mode papier (3, 5 ou 6)
+  const [paperDaysCount, setPaperDaysCount] = useState(3);
+
+  // Persister la préférence de vue
+  useEffect(() => {
+    const saved = localStorage.getItem('planning_view_mode');
+    if (saved === 'week' || saved === 'day' || saved === 'paper') {
+      setViewMode(saved);
+    }
+    const savedDays = localStorage.getItem('planning_paper_days');
+    if (savedDays) {
+      const n = Number(savedDays);
+      if (n === 3 || n === 5 || n === 6) setPaperDaysCount(n);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('planning_view_mode', viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem('planning_paper_days', String(paperDaysCount));
+  }, [paperDaysCount]);
 
   // Jour sélectionné (index 0-5 = Lun-Sam) pour la vue jour
   const [selectedDayIndex, setSelectedDayIndex] = useState<number>(() => {
@@ -308,7 +333,7 @@ export default function PlanningPage() {
           <div className="planning-title-row">
             <h1 className="planning-title">Planning</h1>
             <div className="planning-title-right">
-              {/* Toggle Semaine / Jour */}
+              {/* Toggle Semaine / Jour / Papier */}
               <div className="view-toggle">
                 <button
                   className={`view-toggle-btn ${viewMode === 'week' ? 'view-toggle-btn--active' : ''}`}
@@ -323,6 +348,13 @@ export default function PlanningPage() {
                   type="button"
                 >
                   Jour
+                </button>
+                <button
+                  className={`view-toggle-btn ${viewMode === 'paper' ? 'view-toggle-btn--active' : ''}`}
+                  onClick={() => setViewMode('paper')}
+                  type="button"
+                >
+                  Papier
                 </button>
               </div>
               <div className="planning-stats">
@@ -369,12 +401,43 @@ export default function PlanningPage() {
           />
         </div>
 
-        {/* ─── Zone de contenu : Semaine ou Jour ─── */}
+        {/* ─── Zone de contenu : Semaine, Jour ou Papier ─── */}
         <div className="planning-content">
           {(orgLoading || isLoadingData) ? (
             <div className="loading-state">
               <span className="loading-spinner" />
               <span className="loading-text">Chargement du planning...</span>
+            </div>
+          ) : viewMode === 'paper' ? (
+            <div className="paper-wrap">
+              <div className="paper-toolbar">
+                <div className="paper-toolbar-left">
+                  <select
+                    className="paper-days-select"
+                    value={paperDaysCount}
+                    onChange={(e) => setPaperDaysCount(Number(e.target.value))}
+                  >
+                    <option value={3}>3 jours (Lun-Mer)</option>
+                    <option value={5}>5 jours (Lun-Ven)</option>
+                    <option value={6}>6 jours (Lun-Sam)</option>
+                  </select>
+                </div>
+                <div className="paper-toolbar-right">
+                  <button
+                    className="paper-action-btn"
+                    onClick={() => window.print()}
+                    type="button"
+                  >
+                    {'\uD83D\uDDA8\uFE0F'} Imprimer
+                  </button>
+                </div>
+              </div>
+              <PaperView
+                employees={employees}
+                shifts={shifts}
+                weekDates={weekDates}
+                visibleDays={paperDaysCount}
+              />
             </div>
           ) : viewMode === 'week' ? (
             <GanttChart
@@ -586,6 +649,98 @@ export default function PlanningPage() {
 
         @keyframes spin {
           to { transform: rotate(360deg); }
+        }
+
+        /* ─── Paper view wrapper ─── */
+        .paper-wrap {
+          border: 1px solid var(--color-neutral-300);
+          border-radius: var(--radius-lg);
+          overflow: hidden;
+          background: white;
+        }
+
+        .paper-toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: var(--spacing-2) var(--spacing-4);
+          background: var(--color-neutral-50);
+          border-bottom: 1px solid var(--color-neutral-200);
+          gap: var(--spacing-3);
+          flex-wrap: wrap;
+        }
+
+        .paper-toolbar-left {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-2);
+        }
+
+        .paper-toolbar-right {
+          display: flex;
+          align-items: center;
+          gap: var(--spacing-2);
+        }
+
+        .paper-days-select {
+          padding: 5px 10px;
+          border: 1px solid var(--color-neutral-300);
+          border-radius: var(--radius-md);
+          font-family: var(--font-family-primary);
+          font-size: var(--font-size-xs);
+          font-weight: var(--font-weight-medium);
+          color: var(--color-neutral-700);
+          background: white;
+          cursor: pointer;
+        }
+
+        .paper-days-select:focus {
+          outline: none;
+          border-color: var(--color-primary-400);
+          box-shadow: 0 0 0 2px var(--color-primary-100);
+        }
+
+        .paper-action-btn {
+          padding: 5px 14px;
+          background: white;
+          border: 1px solid var(--color-neutral-300);
+          border-radius: var(--radius-md);
+          cursor: pointer;
+          font-family: var(--font-family-primary);
+          font-size: var(--font-size-xs);
+          font-weight: var(--font-weight-semibold);
+          color: var(--color-neutral-600);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.15s ease;
+        }
+
+        .paper-action-btn:hover {
+          background: var(--color-neutral-100);
+          border-color: var(--color-neutral-400);
+        }
+
+        /* ─── Print styles ─── */
+        @media print {
+          .planning-header,
+          .paper-toolbar {
+            display: none !important;
+          }
+
+          .planning-page {
+            height: auto;
+            gap: 0;
+          }
+
+          .planning-content {
+            flex: none;
+          }
+
+          .paper-wrap {
+            border: none;
+            border-radius: 0;
+          }
         }
       `}</style>
     </>
