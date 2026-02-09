@@ -417,8 +417,13 @@ export default function GanttDayView({
                           const right = timeToPercent(shift.end_time, endHour);
                           const width = right - left;
                           const isHovered = hoveredShiftId === shift.id;
-                          const duration = shiftDurationHours(shift);
-                          const showPauseBadge = shift.break_duration > 0 && (isSaturday || duration >= 6);
+                          const hasPause = shift.break_duration > 0;
+
+                          // Calcul de la portion pause orange (en % de la barre)
+                          const shiftTotalMin = timeToMinutes(shift.end_time) - timeToMinutes(shift.start_time);
+                          const pauseWidthPercent = hasPause && shiftTotalMin > 0
+                            ? (shift.break_duration / shiftTotalMin) * 100
+                            : 0;
 
                           return (
                             <div
@@ -436,10 +441,17 @@ export default function GanttDayView({
                               <span className="gd-bar-time">
                                 {shift.start_time}-{shift.end_time}
                               </span>
-                              {showPauseBadge && (
+                              {hasPause && (
                                 <span className="gd-bar-pause">
                                   P {shift.break_duration}min
                                 </span>
+                              )}
+                              {/* Orange section representing pause duration */}
+                              {hasPause && pauseWidthPercent > 0 && (
+                                <div
+                                  className="gd-bar-pause-zone"
+                                  style={{ width: `${pauseWidthPercent}%` }}
+                                />
                               )}
                             </div>
                           );
@@ -852,14 +864,29 @@ export default function GanttDayView({
         }
 
         .gd-bar-pause {
-          background: rgba(255, 255, 255, 0.25);
+          background: #fb923c;
           padding: 2px 6px;
           border-radius: 4px;
           font-size: 10px;
-          font-weight: 500;
+          font-weight: 600;
           white-space: nowrap;
           flex-shrink: 0;
           margin-right: 4px;
+          color: white;
+          z-index: 2;
+          position: relative;
+        }
+
+        /* Orange zone at end of bar representing pause duration */
+        .gd-bar-pause-zone {
+          position: absolute;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          background: #fb923c;
+          border-radius: 0 6px 6px 0;
+          opacity: 0.6;
+          pointer-events: none;
         }
 
         /* Legend footer */

@@ -233,6 +233,49 @@ export default function PlanningPage() {
 
   // handleAddShift supprime — ajout via clic zone vide uniquement
 
+  /** Creer une journee complete (2 creneaux : matin + apres-midi) */
+  const handleCreateFullDay = useCallback(async (employeeId: string, fullDayDate: string) => {
+    if (!organizationId) return;
+    const employee = employees.find(e => e.id === employeeId);
+    if (!employee) return;
+    const empName = `${employee.first_name} ${employee.last_name}`;
+
+    try {
+      // Matin : 08h30 - 12h30, pas de pause
+      const morningShift = await dbCreateShift(organizationId, {
+        employee_id: employeeId,
+        date: fullDayDate,
+        start_time: '08:30',
+        end_time: '12:30',
+        break_duration: 0,
+      });
+
+      // Apres-midi : 13h30 - 19h00, pause 30min
+      const afternoonShift = await dbCreateShift(organizationId, {
+        employee_id: employeeId,
+        date: fullDayDate,
+        start_time: '13:30',
+        end_time: '19:00',
+        break_duration: 30,
+      });
+
+      const newShifts: Shift[] = [];
+      if (morningShift) newShifts.push(morningShift);
+      if (afternoonShift) newShifts.push(afternoonShift);
+
+      if (newShifts.length > 0) {
+        setShifts(prev => [...prev, ...newShifts]);
+        addToast('success', `Journee complete creee pour ${empName}`);
+      } else {
+        addToast('error', 'Erreur lors de la creation de la journee');
+      }
+    } catch {
+      addToast('error', 'Erreur lors de la creation de la journee');
+    }
+
+    setModalState(INITIAL_MODAL_STATE);
+  }, [organizationId, employees, addToast]);
+
   return (
     <>
       <div className="planning-page">
@@ -339,6 +382,7 @@ export default function PlanningPage() {
           organizationId={organizationId || ''}
           onSave={handleSaveShift}
           onDelete={handleDeleteShift}
+          onCreateFullDay={handleCreateFullDay}
         />
       )}
 

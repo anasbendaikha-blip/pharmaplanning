@@ -44,6 +44,8 @@ interface ShiftModalProps {
   organizationId: string;
   onSave: (shift: Shift) => void;
   onDelete: (shiftId: string) => void;
+  /** Callback pour creer la journee complete (2 creneaux matin + apres-midi) */
+  onCreateFullDay?: (employeeId: string, date: string) => void;
 }
 
 export default function ShiftModal({
@@ -56,6 +58,7 @@ export default function ShiftModal({
   organizationId,
   onSave,
   onDelete,
+  onCreateFullDay,
 }: ShiftModalProps) {
   const isEdit = existingShift !== null;
 
@@ -214,7 +217,7 @@ export default function ShiftModal({
         {/* Header */}
         <div className="modal-header">
           <h2 id="shift-modal-title" className="modal-title">
-            {isEdit ? 'Modifier le shift' : 'Nouveau shift'}
+            {isEdit ? 'Modifier le creneau' : 'Nouveau creneau'}
           </h2>
           <button className="modal-close" onClick={onClose} type="button" aria-label="Fermer">
             &#10005;
@@ -226,7 +229,7 @@ export default function ShiftModal({
           {/* Infos employé + date (non modifiables) */}
           <div className="info-row">
             <div className="info-block">
-              <span className="info-label">Employé</span>
+              <span className="info-label">Employe</span>
               <div className="info-employee">
                 <span className="info-dot" style={{ backgroundColor: employee.display_color }} />
                 <div>
@@ -240,6 +243,45 @@ export default function ShiftModal({
               <span className="info-date">{dateLabel}</span>
             </div>
           </div>
+
+          {/* Raccourcis horaires (uniquement en creation) */}
+          {!isEdit && (
+            <div className="shortcuts-row">
+              <span className="shortcuts-label">RACCOURCIS</span>
+              <div className="shortcuts-btns">
+                <button
+                  className="shortcut-btn"
+                  type="button"
+                  onClick={() => { setStartTime('08:30'); setEndTime('12:30'); setBreakDuration(0); }}
+                >
+                  Matin
+                </button>
+                <button
+                  className="shortcut-btn"
+                  type="button"
+                  onClick={() => { setStartTime('13:30'); setEndTime('19:00'); setBreakDuration(0); }}
+                >
+                  Apres-midi
+                </button>
+                <button
+                  className="shortcut-btn shortcut-btn--accent"
+                  type="button"
+                  onClick={() => {
+                    if (onCreateFullDay) {
+                      onCreateFullDay(employee.id, date);
+                    } else {
+                      // Fallback : remplir journee complete en un seul creneau
+                      setStartTime('08:30');
+                      setEndTime('19:00');
+                      setBreakDuration(60);
+                    }
+                  }}
+                >
+                  Journee
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Horaires */}
           <div className="form-row">
@@ -363,7 +405,7 @@ export default function ShiftModal({
             type="button"
             disabled={hasErrors || isSaving || effectiveHours <= 0}
           >
-            {isSaving ? 'Enregistrement...' : isEdit ? 'Enregistrer' : 'Créer le shift'}
+            {isSaving ? 'Enregistrement...' : isEdit ? 'Enregistrer' : 'Creer le creneau'}
           </button>
         </div>
       </div>
@@ -491,6 +533,56 @@ export default function ShiftModal({
           font-size: var(--font-size-sm);
           font-weight: var(--font-weight-medium);
           color: var(--color-neutral-900);
+        }
+
+        /* Shortcuts */
+        .shortcuts-row {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .shortcuts-label {
+          font-size: 11px;
+          font-weight: 600;
+          color: var(--color-neutral-500, #6b7280);
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+        }
+
+        .shortcuts-btns {
+          display: flex;
+          gap: 8px;
+        }
+
+        .shortcut-btn {
+          flex: 1;
+          padding: 8px 12px;
+          background: var(--color-neutral-100, #f3f4f6);
+          color: var(--color-neutral-700, #374151);
+          border: 1px solid var(--color-neutral-200, #e5e7eb);
+          border-radius: 8px;
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s;
+        }
+
+        .shortcut-btn:hover {
+          background: var(--color-neutral-200, #e5e7eb);
+          border-color: var(--color-neutral-300, #d1d5db);
+        }
+
+        .shortcut-btn--accent {
+          background: var(--color-primary-50, #eef2ff);
+          color: var(--color-primary-700, #4338ca);
+          border-color: var(--color-primary-200, #c7d2fe);
+        }
+
+        .shortcut-btn--accent:hover {
+          background: var(--color-primary-100, #e0e7ff);
+          border-color: var(--color-primary-300, #a5b4fc);
         }
 
         /* Form fields */
