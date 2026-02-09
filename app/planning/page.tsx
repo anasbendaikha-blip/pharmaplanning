@@ -23,6 +23,7 @@ import WeekNavigation from './components/WeekNavigation';
 import GanttDayView from './components/GanttDayView';
 import WeekGanttView from './components/WeekGanttView';
 import ShiftModal from './components/ShiftModal';
+import ExportButton from './components/ExportButton';
 
 /** Mode de vue : jour (Gantt detaille) ou semaine (Gantt global) */
 type ViewMode = 'jour' | 'semaine';
@@ -230,12 +231,7 @@ export default function PlanningPage() {
     setModalState(INITIAL_MODAL_STATE);
   }, [addToast, shifts, employees]);
 
-  // ─── Handler : ouvrir modal creation sans employe pre-selectionne ───
-  const handleAddShift = useCallback(() => {
-    if (employees.length === 0) return;
-    const emp = employees.find(e => e.is_active) || employees[0];
-    setModalState({ isOpen: true, employee: emp, date: selectedDate, existingShift: null });
-  }, [employees, selectedDate]);
+  // handleAddShift supprime — ajout via clic zone vide uniquement
 
   return (
     <>
@@ -274,14 +270,12 @@ export default function PlanningPage() {
                 </button>
               </div>
 
-              {/* Bouton + Ajouter */}
-              <button
-                className="pl-add-btn"
-                onClick={handleAddShift}
-                type="button"
-              >
-                + Ajouter
-              </button>
+              {/* Bouton Exporter (PDF/Excel) */}
+              <ExportButton
+                weekDates={weekDates}
+                shifts={shifts}
+                employees={employees}
+              />
             </div>
           </div>
 
@@ -421,24 +415,6 @@ export default function PlanningPage() {
           background: white;
           color: var(--color-primary-600, #4f46e5);
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        }
-
-        /* Add button */
-        .pl-add-btn {
-          padding: 6px 16px;
-          background: var(--color-primary-600, #4f46e5);
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-family: inherit;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: background 0.15s;
-        }
-
-        .pl-add-btn:hover {
-          background: var(--color-primary-700, #4338ca);
         }
 
         /* Day tabs */

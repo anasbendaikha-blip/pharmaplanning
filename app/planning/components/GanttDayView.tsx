@@ -1,13 +1,13 @@
 /**
  * GanttDayView — Vue Gantt detaillee par jour
  *
- * Timeline horizontale 7h-21h avec barres de creneaux par employe.
+ * Timeline horizontale 8h-19h (semaine) ou 8h-17h (samedi).
  * Bandes bleues avant ouverture / apres fermeture (pharmacie fermee).
  * Zone jaune fermeture 12h30-13h30 (Lun-Ven) avec label "FERME".
  * Samedi : pas de fermeture midi, pauses affichees sur barres longues.
  * Disponibilites etudiants : fond vert (dispo) / rouge (non dispo).
  * PAS de titres de categories — seulement pastille couleur par employe.
- * Legende en footer.
+ * Legende en footer. Hauteur compacte (40px/ligne) pour 10+ employes sans scroll.
  *
  * Conventions : styled-jsx, prefix "gd-", pas d'emojis, ASCII uniquement.
  */
@@ -19,16 +19,16 @@ import { formatHours } from '@/lib/utils/hourUtils';
 
 // --- Constants ---
 
-const START_HOUR = 7;
-const END_HOUR = 21;
-const TOTAL_HOURS = END_HOUR - START_HOUR; // 14h
-const HOUR_PX = 60; // pixels par heure
+const START_HOUR = 8;
+const END_HOUR_WEEKDAY = 19; // Lun-Ven : timeline 8h-19h
+const END_HOUR_SATURDAY = 17; // Samedi : timeline 8h-17h
+const HOUR_PX = 70; // pixels par heure (plus large pour meilleure lisibilite)
 
 /** Horaires d'ouverture pharmacie */
 const OPEN_WEEKDAY = '08:30';
-const CLOSE_WEEKDAY = '20:30';
+const CLOSE_WEEKDAY = '19:00';
 const OPEN_SATURDAY = '08:30';
-const CLOSE_SATURDAY = '19:30';
+const CLOSE_SATURDAY = '17:00';
 
 /** Fermeture midi Lun-Ven */
 const CLOSURE_START = '12:30';
@@ -61,9 +61,9 @@ const LEGEND_ITEMS: { label: string; color: string }[] = [
   { label: 'Etudiant', color: '#2563eb' },
 ];
 
-const ROW_HEIGHT = 56;
-const BAR_HEIGHT = 32;
-const SIDEBAR_WIDTH = 180;
+const ROW_HEIGHT = 40;
+const BAR_HEIGHT = 28;
+const SIDEBAR_WIDTH = 220;
 
 // --- Types ---
 
@@ -89,15 +89,17 @@ function timeToMinutes(time: string): number {
   return h * 60 + m;
 }
 
-function timeToPercent(time: string): number {
+function timeToPercent(time: string, endHour: number): number {
   const [h, m] = time.split(':').map(Number);
+  const totalHours = endHour - START_HOUR;
   const minutesFromStart = (h - START_HOUR) * 60 + m;
-  const totalMinutes = TOTAL_HOURS * 60;
+  const totalMinutes = totalHours * 60;
   return Math.max(0, Math.min(100, (minutesFromStart / totalMinutes) * 100));
 }
 
-function percentToTime(percent: number): string {
-  const totalMinutes = TOTAL_HOURS * 60;
+function percentToTime(percent: number, endHour: number): string {
+  const totalHours = endHour - START_HOUR;
+  const totalMinutes = totalHours * 60;
   const minutesFromStart = (percent / 100) * totalMinutes;
   const roundedMinutes = Math.round(minutesFromStart / 15) * 15;
   const h = Math.floor(roundedMinutes / 60) + START_HOUR;
@@ -162,13 +164,17 @@ export default function GanttDayView({
   const isSunday = dayOfWeek === 0;
   const showClosure = !isSaturday && !isSunday; // Fermeture seulement Lun-Ven
 
+  // Timeline fin dynamique selon le jour
+  const endHour = isSaturday ? END_HOUR_SATURDAY : END_HOUR_WEEKDAY;
+  const totalHours = endHour - START_HOUR;
+
   // Horaires ouverture/fermeture selon le jour
   const openTime = isSaturday ? OPEN_SATURDAY : OPEN_WEEKDAY;
   const closeTime = isSaturday ? CLOSE_SATURDAY : CLOSE_WEEKDAY;
 
   // Zones fermees (bandes bleues)
-  const closedBeforePercent = timeToPercent(openTime);
-  const closedAfterPercent = timeToPercent(closeTime);
+  const closedBeforePercent = timeToPercent(openTime, endHour);
+  const closedAfterPercent = timeToPercent(closeTime, endHour);
 
   const sortedEmployees = useMemo(() => sortEmployees(employees), [employees]);
 
@@ -199,32 +205,32 @@ export default function GanttDayView({
       if (!isToday) { setNowPercent(-1); return; }
       const now = new Date();
       const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const p = timeToPercent(time);
+      const p = timeToPercent(time, endHour);
       setNowPercent(p > 0 && p < 100 ? p : -1);
     }
     updateNow();
     const interval = setInterval(updateNow, 60000);
     return () => clearInterval(interval);
-  }, [isToday]);
+  }, [isToday, endHour]);
 
   // Hour marks
   const hourMarks = useMemo(() => {
     const marks: number[] = [];
-    for (let h = START_HOUR; h <= END_HOUR; h++) marks.push(h);
+    for (let h = START_HOUR; h <= endHour; h++) marks.push(h);
     return marks;
-  }, []);
+  }, [endHour]);
 
   // Closure zone positions (yellow zone)
   const closureZone = useMemo(() => {
     if (!showClosure) return null;
     return {
-      left: timeToPercent(CLOSURE_START),
-      width: timeToPercent(CLOSURE_END) - timeToPercent(CLOSURE_START),
+      left: timeToPercent(CLOSURE_START, endHour),
+      width: timeToPercent(CLOSURE_END, endHour) - timeToPercent(CLOSURE_START, endHour),
     };
-  }, [showClosure]);
+  }, [showClosure, endHour]);
 
   // Timeline width in pixels
-  const timelineWidth = TOTAL_HOURS * HOUR_PX;
+  const timelineWidth = totalHours * HOUR_PX;
 
   // --- Handlers ---
 
@@ -239,9 +245,9 @@ export default function GanttDayView({
     const areaRect = timelineArea.getBoundingClientRect();
     const relativeX = e.clientX - areaRect.left;
     const percent = (relativeX / areaRect.width) * 100;
-    const clickTime = percentToTime(percent);
+    const clickTime = percentToTime(percent, endHour);
     onCreateAtTime(employeeId, date, clickTime);
-  }, [date, onCreateAtTime]);
+  }, [date, onCreateAtTime, endHour]);
 
   const handleBarMouseEnter = useCallback((e: React.MouseEvent, shift: Shift, emp: Employee) => {
     setHoveredShiftId(shift.id);
@@ -294,7 +300,7 @@ export default function GanttDayView({
                 <div
                   key={h}
                   className="gd-hour-mark"
-                  style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`)}%` }}
+                  style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`, endHour)}%` }}
                 >
                   <span className="gd-hour-label">{h}h</span>
                 </div>
@@ -389,7 +395,7 @@ export default function GanttDayView({
                           <div
                             key={h}
                             className="gd-gridline"
-                            style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`)}%` }}
+                            style={{ left: `${timeToPercent(`${String(h).padStart(2, '0')}:00`, endHour)}%` }}
                           />
                         ))}
 
@@ -407,8 +413,8 @@ export default function GanttDayView({
 
                         {/* Shift bars */}
                         {empShifts.map(shift => {
-                          const left = timeToPercent(shift.start_time);
-                          const right = timeToPercent(shift.end_time);
+                          const left = timeToPercent(shift.start_time, endHour);
+                          const right = timeToPercent(shift.end_time, endHour);
                           const width = right - left;
                           const isHovered = hoveredShiftId === shift.id;
                           const duration = shiftDurationHours(shift);
@@ -947,8 +953,8 @@ export default function GanttDayView({
         @media (max-width: 768px) {
           .gd-header-name,
           .gd-row-name {
-            width: 120px;
-            min-width: 120px;
+            width: 140px;
+            min-width: 140px;
           }
           .gd-role-badge { width: 10px; height: 10px; }
           .gd-name-text { font-size: 11px; }
